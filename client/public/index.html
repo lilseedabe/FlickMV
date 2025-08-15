@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="FlickMV - AI-powered music video creation tool" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="FlickMV - Music Video Creator" />
+    <meta property="og:description" content="Create stunning music videos from AI-generated images with our intuitive web tool" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.png" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <title>FlickMV - Music Video Creator</title>
+  </head>
+  <body class="bg-dark-900 text-white">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-dark-900 flex items-center justify-center z-50">
+      <div class="text-center">
+        <div class="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <h2 class="text-2xl font-bold text-primary-500 mb-2">FlickMV</h2>
+        <p class="text-dark-400">Loading your creative workspace...</p>
+      </div>
+    </div>
+    
+    <script>
+      // Remove loading screen when app loads
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          const loadingScreen = document.getElementById('loading-screen');
+          if (loadingScreen) {
+            loadingScreen.style.opacity = '0';
+            loadingScreen.style.transition = 'opacity 0.5s ease-out';
+            setTimeout(() => loadingScreen.remove(), 500);
+          }
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>

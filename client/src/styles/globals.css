@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* カスタムCSSクラス */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-dark-900 text-white;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+@layer components {
+  /* グラスモーフィズム効果 */
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  .glass-dark {
+    @apply bg-black/20 backdrop-blur-md border border-white/10;
+  }
+  
+  /* ボタンスタイル */
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors duration-200 font-medium;
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg transition-colors duration-200 font-medium border border-dark-600;
+  }
+  
+  .btn-ghost {
+    @apply px-4 py-2 hover:bg-white/10 text-white rounded-lg transition-colors duration-200 font-medium;
+  }
+  
+  /* カードスタイル */
+  .card {
+    @apply bg-dark-800 border border-dark-700 rounded-xl p-6 shadow-lg;
+  }
+  
+  .card-glass {
+    @apply glass rounded-xl p-6 shadow-xl;
+  }
+  
+  /* 入力フィールド */
+  .input {
+    @apply w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-dark-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors duration-200;
+  }
+  
+  /* タイムライン関連 */
+  .timeline-track {
+    @apply bg-dark-800 border border-dark-600 rounded-lg min-h-[60px] relative overflow-hidden;
+  }
+  
+  .timeline-clip {
+    @apply bg-gradient-to-r from-primary-600 to-primary-700 rounded-md h-12 flex items-center px-3 text-sm font-medium cursor-pointer hover:from-primary-500 hover:to-primary-600 transition-colors duration-200;
+  }
+  
+  .timeline-audio {
+    @apply bg-gradient-to-r from-secondary-600 to-secondary-700 rounded-md h-8 flex items-center px-2 text-xs font-medium cursor-pointer hover:from-secondary-500 hover:to-secondary-600 transition-colors duration-200;
+  }
+  
+  /* スクロールバーカスタマイズ */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-dark-800;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-dark-600 rounded-full;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-dark-500;
+  }
+}
+
+@layer utilities {
+  /* カスタムユーティリティ */
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  
+  .animate-bounce-slow {
+    animation: bounce 2s infinite;
+  }
+}

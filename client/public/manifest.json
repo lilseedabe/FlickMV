@@ -1,0 +1,26 @@
+{
+  "name": "FlickMV - Music Video Creator",
+  "short_name": "FlickMV",
+  "description": "Create stunning music videos from AI-generated images with our intuitive web tool",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512", 
+      "type": "image/png"
+    }
+  ],
+  "categories": ["productivity", "photo", "video"],
+  "lang": "en-US",
+  "dir": "ltr"
+}

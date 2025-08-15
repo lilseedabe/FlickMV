@@ -1,0 +1,50 @@
+name: Build and Push Worker
+
+on:
+  push:
+    paths:
+      - 'worker/**'
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker auth for GCR
+        run: gcloud auth configure-docker --quiet
+
+      - name: Build Docker image
+        run: docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/flickmv-worker:${{ github.sha }} ./worker
+
+      - name: Push image
+        run: docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/flickmv-worker:${{ github.sha }}
+
+      - name: Update Cloud Run Job (create if missing)
+        run: |
+          REGION="asia-northeast1"
+          IMAGE="gcr.io/${{ secrets.GCP_PROJECT_ID }}/flickmv-worker:${{ github.sha }}"
+          JOB="flickmv-worker-job"
+          set -e
+          if gcloud beta run jobs describe "$JOB" --region="$REGION" >/dev/null 2>&1; then
+            gcloud beta run jobs update "$JOB" \
+              --image="$IMAGE" \
+              --region="$REGION"
+          else
+            gcloud beta run jobs create "$JOB" \
+              --image="$IMAGE" \
+              --tasks=1 \
+              --memory=8Gi \
+              --region="$REGION"
+          fi
