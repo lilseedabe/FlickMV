@@ -100,7 +100,7 @@ const Login: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-900 to-purple-900/20 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-dark-900 via-dark-900 to-purple-900/20 min-h-full flex items-center justify-center">
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
@@ -114,7 +114,7 @@ const Login: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-900 to-purple-900/20 flex">
+    <div className="bg-gradient-to-br from-dark-900 via-dark-900 to-purple-900/20 min-h-full flex">
       {/* Left Side - Branding */}
       <motion.div 
         initial={{ opacity: 0, x: -50 }}

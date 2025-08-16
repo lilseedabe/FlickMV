@@ -103,7 +103,7 @@ const AppContent: React.FC = () => {
       <Router>
         <div className="flex flex-col h-screen">
           <Navbar />
-          <main className="flex-1 overflow-hidden relative">
+          <main className="flex-1 overflow-auto relative scrollbar-thin">
             <AnimatePresence mode="wait">
               <Routes>
                 <Route path="/" element={<Dashboard />} />

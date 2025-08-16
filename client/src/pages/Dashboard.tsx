@@ -25,6 +25,9 @@ import {
   Heart
 } from 'lucide-react';
 
+// Context
+import { useUser } from '../contexts/UserContext';
+
 // Mock data for projects
 const mockProjects = [
   {
@@ -126,23 +129,39 @@ const templates = [
 ];
 
 const Dashboard: React.FC = () => {
+  const { user } = useUser();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState('all');
   const [showWelcome, setShowWelcome] = useState(false);
   const [activeTab, setActiveTab] = useState('projects');
   const [isFirstTime, setIsFirstTime] = useState(false);
 
+  // Determine if user should see mock data (demo account) or real data
+  const isDemo = user?.email === 'demo@flickmv.com';
+  const userProjects = isDemo ? mockProjects : [];
+  const userStats = isDemo ? {
+    projectCount: mockProjects.length,
+    mediaFiles: '127',
+    createdVideos: '18',
+    totalTime: '5h 23m'
+  } : {
+    projectCount: 0,
+    mediaFiles: '0',
+    createdVideos: '0',
+    totalTime: '0m'
+  };
+
   useEffect(() => {
-    // Check if this is user's first time
-    const hasVisited = localStorage.getItem('hasVisited');
-    if (!hasVisited) {
+    // Check if this is user's first time OR if they're a new registered user
+    const hasVisited = localStorage.getItem(`hasVisited_${user?.email}`);
+    if (!hasVisited && user) {
       setIsFirstTime(true);
       setShowWelcome(true);
-      localStorage.setItem('hasVisited', 'true');
+      localStorage.setItem(`hasVisited_${user.email}`, 'true');
     }
-  }, []);
+  }, [user]);
 
-  const filteredProjects = mockProjects.filter(project => {
+  const filteredProjects = userProjects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterBy === 'all' || project.status === filterBy;
     return matchesSearch && matchesFilter;
@@ -183,7 +202,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-900 to-purple-900/20">
+    <div className="bg-gradient-to-br from-dark-900 via-dark-900 to-purple-900/20 min-h-full">
       {/* Welcome Modal for First Time Users */}
       <AnimatePresence>
         {isFirstTime && showWelcome && (
@@ -260,7 +279,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent mb-2">
-                おかえりなさい！ 👋
+                {user?.name ? `おかえりなさい、${user.name}さん！` : 'おかえりなさい！'} 👋
               </h1>
               <p className="text-dark-400 text-lg">
                 AIの力で素晴らしいミュージックビデオを作成しましょう
@@ -327,10 +346,10 @@ const Dashboard: React.FC = () => {
               {/* Quick Stats */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 {[
-                  { label: 'プロジェクト数', value: mockProjects.length, icon: Folder, color: 'purple' },
-                  { label: 'メディアファイル', value: '127', icon: Image, color: 'blue' },
-                  { label: '作成した動画', value: '18', icon: Video, color: 'green' },
-                  { label: '総再生時間', value: '5h 23m', icon: Clock, color: 'orange' }
+                  { label: 'プロジェクト数', value: userStats.projectCount, icon: Folder, color: 'purple' },
+                  { label: 'メディアファイル', value: userStats.mediaFiles, icon: Image, color: 'blue' },
+                  { label: '作成した動画', value: userStats.createdVideos, icon: Video, color: 'green' },
+                  { label: '総再生時間', value: userStats.totalTime, icon: Clock, color: 'orange' }
                 ].map((stat, index) => {
                   const Icon = stat.icon;
                   return (

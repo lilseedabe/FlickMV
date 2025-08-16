@@ -6,11 +6,17 @@
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    scroll-behavior: smooth;
   }
   
   body {
     @apply bg-dark-900 text-white;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  /* スムーズスクロールの設定 */
+  * {
+    scroll-behavior: smooth;
   }
 }
 

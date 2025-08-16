@@ -171,7 +171,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         name,
         email,
         createdAt: new Date(),
-        lastLoginAt: new Date()
+        lastLoginAt: new Date(),
+        usage: {
+          exportsThisMonth: 0,
+          totalExports: 0,
+          storageUsed: 0,
+          storageLimit: 1,
+          lastExportDate: undefined
+        }
       };
       
       // Add to registered users list
@@ -190,9 +197,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.setItem('flickmv_current_user', JSON.stringify(newUser));
       
       setUser(newUser);
-      setNotifications(mockNotifications);
       
-      // Add welcome notification
+      // Add only welcome notification for new users (not mock notifications)
       const welcomeNotification: Notification = {
         id: `notif_welcome_${Date.now()}`,
         type: 'success',
@@ -202,7 +208,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createdAt: new Date()
       };
       
-      setNotifications(prev => [welcomeNotification, ...prev]);
+      setNotifications([welcomeNotification]);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
