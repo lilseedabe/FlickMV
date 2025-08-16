@@ -76,7 +76,12 @@ export class BPMDetector {
     
     // RMS（音量レベル）計算
     const rms = this.calculateRMS(windowData);
-    const peak = Math.max(...windowData.map(Math.abs));
+    // ES5 ターゲットでも動作するようにスプレッド/TypedArray.map を避ける
+    let peak = 0;
+    for (let i = 0; i < windowData.length; i++) {
+      const v = Math.abs(windowData[i]);
+      if (v > peak) peak = v;
+    }
     
     // スペクトラル重心（音の明るさ）計算
     const spectralCentroid = this.calculateSpectralCentroid(fftData);

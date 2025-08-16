@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useMutation, useQueryClient, UseQueryOptions, UseMutationOptions } from 'react-query';
 import { 
   authAPI, 
@@ -59,12 +60,13 @@ export const queryKeys = {
   invoices: ['billing', 'invoices'] as const,
 } as const;
 
-// エラーハンドリング用のユーティリティ
-const handleMutationError = (error: unknown): APIError => {
+// エラーハンドリング用のユーティリティ（react-query の onError 用に void を返す）
+const handleMutationError = (error: unknown): void => {
   if (error instanceof APIError) {
-    return error;
+    console.error('Mutation error:', error.message, error.status, error.details);
+  } else {
+    console.error('Mutation error:', error);
   }
-  return new APIError('An unexpected error occurred');
 };
 
 // ==================== USER HOOKS ====================

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, RefObject } from 'react';
+import React, { useState, useEffect, useRef, useCallback, RefObject } from 'react';
 import { usePrefersReducedMotion } from './useResponsive';
 
 // フォーカス管理フック
@@ -289,15 +289,18 @@ export const useColorContrast = () => {
       
       ctx.fillStyle = color;
       ctx.fillRect(0, 0, 1, 1);
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      const data = ctx.getImageData(0, 0, 1, 1).data;
+      const r = data[0];
+      const g = data[1];
+      const b = data[2];
       return [r, g, b];
     };
 
     // 相対輝度を計算
     const getLuminance = (rgb: number[]) => {
       const [r, g, b] = rgb.map(c => {
-        c = c / 255;
-        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
       });
       return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
@@ -383,14 +386,15 @@ export const useLiveRegion = () => {
     }
   }, []);
 
-  const LiveRegion = useCallback(() => (
-    <div
-      ref={liveRegionRef}
-      aria-live="polite"
-      aria-atomic="true"
-      className="sr-only"
-    />
-  ), []);
+  // JSX を使わずに要素を返す（.ts ファイル互換）
+  const LiveRegion = useCallback(() => {
+    return React.createElement('div', {
+      ref: liveRegionRef,
+      'aria-live': 'polite',
+      'aria-atomic': 'true',
+      className: 'sr-only',
+    } as unknown as React.HTMLAttributes<HTMLDivElement> & { ref: React.Ref<HTMLDivElement> });
+  }, []);
 
   return {
     updateLiveRegion,

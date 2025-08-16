@@ -247,7 +247,7 @@ export const useDeviceInfo = () => {
 
 // アダプティブローディング（低電力モードやネットワーク状態に応じた最適化）
 export const useAdaptiveLoading = () => {
-  const { isOnline } = useIsOnline();
+  const isOnline = useIsOnline();
   const batteryInfo = useBatteryInfo();
   const { isMobile } = useBreakpoint();
 

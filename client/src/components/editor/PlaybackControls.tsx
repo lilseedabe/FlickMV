@@ -281,10 +281,13 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
       {/* Playback Speed */}
       <div className="flex items-center space-x-2">
         <span className="text-xs text-dark-400">Speed:</span>
-        <select className="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:border-primary-500">
+        <select 
+          className="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:border-primary-500"
+          defaultValue="1"
+        >
           <option value="0.25">0.25x</option>
           <option value="0.5">0.5x</option>
-          <option value="1" selected>1x</option>
+          <option value="1">1x</option>
           <option value="1.25">1.25x</option>
           <option value="1.5">1.5x</option>
           <option value="2">2x</option>

@@ -446,7 +446,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     value={projectSettings.frameRate}
                     onChange={(e) => onSettingsUpdate({
                       ...projectSettings,
-                      frameRate: parseInt(e.target.value)
+                      frameRate: Number(e.target.value) as 24 | 30 | 60
                     })}
                     className="input"
                   >

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QueryClient, QueryClientProvider } from 'react-query';
-import { ReactQueryDevtools } from 'react-query/devtools';
 import './styles/globals.css';
 
 // Context Providers
@@ -152,11 +151,6 @@ function App() {
             <AppContent />
           </TutorialProvider>
         </UserProvider>
-        
-        {/* 開発環境でのReact Query DevTools */}
-        {process.env.NODE_ENV === 'development' && (
-          <ReactQueryDevtools initialIsOpen={false} />
-        )}
       </QueryClientProvider>
     </ErrorBoundary>
   );

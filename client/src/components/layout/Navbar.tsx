@@ -217,7 +217,7 @@ const Navbar: React.FC = () => {
         {user && (
           <div className="flex items-center space-x-2">
             <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg bg-${userPlan.color}-500/20 text-${userPlan.color}-400`}>
-              <userPlan.icon className="w-4 h-4" />
+              {React.createElement(userPlan.icon, { className: "w-4 h-4" })}
               <span className="text-sm font-medium hidden sm:inline">{userPlan.name}</span>
             </div>
             
@@ -345,7 +345,7 @@ const Navbar: React.FC = () => {
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-sm text-gray-400">プラン</span>
                       <div className={`flex items-center space-x-1 px-2 py-1 rounded-full bg-${userPlan.color}-500/20 text-${userPlan.color}-400`}>
-                        <userPlan.icon className="w-3 h-3" />
+                        {React.createElement(userPlan.icon, { className: "w-3 h-3" })}
                         <span className="text-xs font-medium">{userPlan.name}</span>
                       </div>
                     </div>

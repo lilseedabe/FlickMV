@@ -1,1 +1,540 @@
-import React, { useState, useMemo } from 'react';\nimport { motion, AnimatePresence } from 'framer-motion';\nimport { \n  Scissors, \n  Sparkles, \n  Palette, \n  RotateCw, \n  Zap, \n  Play, \n  Eye, \n  Star,\n  Clock,\n  TrendingUp,\n  Filter,\n  Search,\n  Info,\n  ChevronDown,\n  Download,\n  Wand2,\n  Music,\n  Volume2,\n  Hash\n} from 'lucide-react';\n\nimport { \n  EditRecipesPanelProps,\n  EditRecipe,\n  TimelineClip,\n  BPMAnalysis\n} from '../../types';\n\n// プリセットレシピの定義\nconst PRESET_RECIPES: EditRecipe[] = [\n  {\n    id: 'beat_cut',\n    name: 'ビートカット',\n    description: '音楽のビートに合わせて映像を自動カット',\n    icon: 'scissors',\n    category: 'cutting',\n    difficulty: 'beginner',\n    trigger: 'beat',\n    parameters: {\n      cutInterval: 'every_beat', // every_beat, every_2_beats, every_bar\n      transitionType: 'cut', // cut, crossfade, slide\n      transitionDuration: 0.1\n    }\n  },\n  {\n    id: 'beat_zoom',\n    name: 'ビートズーム',\n    description: 'ビートに合わせてズームイン/アウト',\n    icon: 'zoom-in',\n    category: 'animation',\n    difficulty: 'beginner',\n    trigger: 'beat',\n    parameters: {\n      zoomStrength: 0.1, // 0.05-0.3\n      zoomDirection: 'alternating', // in, out, alternating\n      easing: 'ease-out'\n    }\n  },\n  {\n    id: 'color_flash',\n    name: 'カラーフラッシュ',\n    description: 'ビートに合わせて色調を変化',\n    icon: 'palette',\n    category: 'color',\n    difficulty: 'intermediate',\n    trigger: 'beat',\n    parameters: {\n      flashIntensity: 0.3,\n      colorShift: 20, // hue shift in degrees\n      duration: 0.15\n    }\n  },\n  {\n    id: 'shake_effect',\n    name: 'シェイクエフェクト',\n    description: 'ドロップやビートで画面を揺らす',\n    icon: 'zap',\n    category: 'effects',\n    difficulty: 'intermediate',\n    trigger: 'beat',\n    parameters: {\n      intensity: 0.02, // 0.01-0.05\n      frequency: 20, // Hz\n      duration: 0.2,\n      direction: 'xy' // x, y, xy\n    }\n  },\n  {\n    id: 'slide_transition',\n    name: 'スライド遷移',\n    description: '小節の変わり目でスライド切り替え',\n    icon: 'arrow-right',\n    category: 'cutting',\n    difficulty: 'beginner',\n    trigger: 'bar',\n    parameters: {\n      direction: 'left', // left, right, up, down\n      duration: 0.5,\n      easing: 'ease-in-out'\n    }\n  },\n  {\n    id: 'blur_pulse',\n    name: 'ブラーパルス',\n    description: 'ビートに合わせてぼかしエフェクト',\n    icon: 'circle',\n    category: 'effects',\n    difficulty: 'advanced',\n    trigger: 'beat',\n    parameters: {\n      blurAmount: 3, // 1-10 pixels\n      pulseSpeed: 1.0,\n      fadeTime: 0.1\n    }\n  },\n  {\n    id: 'auto_ken_burns',\n    name: 'オートケンバーンズ',\n    description: 'BPMに同期したパン&ズーム',\n    icon: 'move',\n    category: 'animation',\n    difficulty: 'advanced',\n    trigger: 'bar',\n    parameters: {\n      panAmount: 0.1, // 0.05-0.2\n      zoomAmount: 0.15, // 0.1-0.3\n      duration: 'bar_length', // bar_length, 2_bars, 4_bars\n      randomDirection: true\n    }\n  },\n  {\n    id: 'beat_glow',\n    name: 'ビートグロー',\n    description: 'ビートで光の輪郭を追加',\n    icon: 'sun',\n    category: 'effects',\n    difficulty: 'intermediate',\n    trigger: 'beat',\n    parameters: {\n      glowColor: '#ffffff',\n      glowIntensity: 0.5,\n      glowSize: 20, // pixels\n      fadeOut: 0.3\n    }\n  }\n];\n\n/**\n * Edit Recipesパネル\n * ビート同期の自動編集機能を提供\n */\nconst EditRecipesPanel: React.FC<EditRecipesPanelProps> = ({\n  recipes = PRESET_RECIPES,\n  selectedClip,\n  bpmAnalysis,\n  onRecipeApply,\n  onRecipePreview\n}) => {\n  const [searchQuery, setSearchQuery] = useState('');\n  const [selectedCategory, setSelectedCategory] = useState<string>('all');\n  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');\n  const [previewingRecipe, setPreviewingRecipe] = useState<string | null>(null);\n  const [showAdvanced, setShowAdvanced] = useState(false);\n  const [customParameters, setCustomParameters] = useState<Record<string, any>>({});\n\n  // カテゴリの一覧\n  const categories = [\n    { id: 'all', name: '全て', icon: Hash },\n    { id: 'cutting', name: 'カット', icon: Scissors },\n    { id: 'animation', name: 'アニメーション', icon: RotateCw },\n    { id: 'effects', name: 'エフェクト', icon: Sparkles },\n    { id: 'color', name: 'カラー', icon: Palette }\n  ];\n\n  // フィルタリングされたレシピ\n  const filteredRecipes = useMemo(() => {\n    let filtered = recipes;\n\n    // テキスト検索\n    if (searchQuery) {\n      filtered = filtered.filter(recipe => \n        recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||\n        recipe.description.toLowerCase().includes(searchQuery.toLowerCase())\n      );\n    }\n\n    // カテゴリフィルター\n    if (selectedCategory !== 'all') {\n      filtered = filtered.filter(recipe => recipe.category === selectedCategory);\n    }\n\n    // 難易度フィルター\n    if (selectedDifficulty !== 'all') {\n      filtered = filtered.filter(recipe => recipe.difficulty === selectedDifficulty);\n    }\n\n    return filtered;\n  }, [recipes, searchQuery, selectedCategory, selectedDifficulty]);\n\n  // レシピアイコンの取得\n  const getRecipeIcon = (iconName: string) => {\n    const iconMap: Record<string, any> = {\n      'scissors': Scissors,\n      'sparkles': Sparkles,\n      'palette': Palette,\n      'rotate-cw': RotateCw,\n      'zap': Zap,\n      'zoom-in': Zap, // 適当なアイコンで代用\n      'arrow-right': RotateCw,\n      'circle': Sparkles,\n      'move': RotateCw,\n      'sun': Sparkles\n    };\n    return iconMap[iconName] || Sparkles;\n  };\n\n  // 難易度の色取得\n  const getDifficultyColor = (difficulty: string) => {\n    switch (difficulty) {\n      case 'beginner': return 'text-green-400';\n      case 'intermediate': return 'text-yellow-400';\n      case 'advanced': return 'text-red-400';\n      default: return 'text-gray-400';\n    }\n  };\n\n  // レシピプレビュー\n  const handlePreview = (recipe: EditRecipe) => {\n    setPreviewingRecipe(previewingRecipe === recipe.id ? null : recipe.id);\n    onRecipePreview(recipe);\n  };\n\n  // レシピ適用\n  const handleApply = (recipe: EditRecipe) => {\n    if (!selectedClip) {\n      alert('クリップを選択してください');\n      return;\n    }\n\n    // カスタムパラメータがあれば適用\n    const finalRecipe = {\n      ...recipe,\n      parameters: {\n        ...recipe.parameters,\n        ...customParameters[recipe.id]\n      }\n    };\n\n    onRecipeApply(finalRecipe, selectedClip);\n  };\n\n  // パラメータの更新\n  const updateParameter = (recipeId: string, paramName: string, value: any) => {\n    setCustomParameters(prev => ({\n      ...prev,\n      [recipeId]: {\n        ...prev[recipeId],\n        [paramName]: value\n      }\n    }));\n  };\n\n  // BPM情報の表示\n  const bpmInfo = bpmAnalysis ? {\n    bpm: bpmAnalysis.bpm,\n    beatInterval: 60 / bpmAnalysis.bpm,\n    barInterval: (60 / bpmAnalysis.bpm) * 4,\n    totalBeats: bpmAnalysis.beatTimes.length,\n    totalBars: bpmAnalysis.bars.length\n  } : null;\n\n  return (\n    <div className=\"h-full bg-dark-900 flex flex-col\">\n      {/* ヘッダー */}\n      <div className=\"p-4 border-b border-dark-700\">\n        <div className=\"flex items-center space-x-3 mb-4\">\n          <div className=\"w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center\">\n            <Wand2 className=\"w-4 h-4 text-white\" />\n          </div>\n          <div>\n            <h2 className=\"text-lg font-semibold text-white\">Edit Recipes</h2>\n            <p className=\"text-sm text-gray-400\">ビート同期の自動編集</p>\n          </div>\n        </div>\n\n        {/* BPM情報 */}\n        {bpmInfo && (\n          <div className=\"bg-purple-500/20 border border-purple-500/30 rounded-lg p-3 mb-4\">\n            <div className=\"flex items-center space-x-2 mb-2\">\n              <Music className=\"w-4 h-4 text-purple-400\" />\n              <span className=\"text-sm font-medium text-white\">楽曲情報</span>\n            </div>\n            <div className=\"grid grid-cols-2 gap-3 text-xs\">\n              <div className=\"flex justify-between\">\n                <span className=\"text-gray-400\">BPM:</span>\n                <span className=\"text-white font-medium\">{bpmInfo.bpm}</span>\n              </div>\n              <div className=\"flex justify-between\">\n                <span className=\"text-gray-400\">ビート間隔:</span>\n                <span className=\"text-white\">{bpmInfo.beatInterval.toFixed(2)}s</span>\n              </div>\n              <div className=\"flex justify-between\">\n                <span className=\"text-gray-400\">小節間隔:</span>\n                <span className=\"text-white\">{bpmInfo.barInterval.toFixed(1)}s</span>\n              </div>\n              <div className=\"flex justify-between\">\n                <span className=\"text-gray-400\">総ビート数:</span>\n                <span className=\"text-white\">{bpmInfo.totalBeats}</span>\n              </div>\n            </div>\n          </div>\n        )}\n\n        {/* 検索バー */}\n        <div className=\"relative mb-3\">\n          <Search className=\"w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2\" />\n          <input\n            type=\"text\"\n            placeholder=\"レシピを検索...\"\n            value={searchQuery}\n            onChange={(e) => setSearchQuery(e.target.value)}\n            className=\"w-full bg-dark-700 border border-dark-600 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500\"\n          />\n        </div>\n\n        {/* カテゴリフィルター */}\n        <div className=\"flex space-x-1 mb-3 overflow-x-auto\">\n          {categories.map(category => {\n            const Icon = category.icon;\n            return (\n              <button\n                key={category.id}\n                onClick={() => setSelectedCategory(category.id)}\n                className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all ${\n                  selectedCategory === category.id\n                    ? 'bg-orange-500 text-white'\n                    : 'bg-dark-700 text-gray-400 hover:text-white'\n                }`}\n              >\n                <Icon className=\"w-3 h-3\" />\n                <span>{category.name}</span>\n              </button>\n            );\n          })}\n        </div>\n\n        {/* 難易度フィルター */}\n        <select\n          value={selectedDifficulty}\n          onChange={(e) => setSelectedDifficulty(e.target.value)}\n          className=\"w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-white mb-3\"\n        >\n          <option value=\"all\">全ての難易度</option>\n          <option value=\"beginner\">初心者</option>\n          <option value=\"intermediate\">中級者</option>\n          <option value=\"advanced\">上級者</option>\n        </select>\n\n        {/* 選択中のクリップ情報 */}\n        {selectedClip ? (\n          <div className=\"bg-blue-500/20 border border-blue-500/30 rounded-lg p-3\">\n            <div className=\"flex items-center space-x-2 mb-1\">\n              <Clock className=\"w-3 h-3 text-blue-400\" />\n              <span className=\"text-xs font-medium text-blue-400\">選択中のクリップ</span>\n            </div>\n            <div className=\"text-xs text-gray-300\">\n              開始: {selectedClip.startTime.toFixed(1)}s • \n              長さ: {selectedClip.duration.toFixed(1)}s • \n              レイヤー: {selectedClip.layer + 1}\n            </div>\n          </div>\n        ) : (\n          <div className=\"bg-gray-500/20 border border-gray-500/30 rounded-lg p-3\">\n            <div className=\"text-xs text-gray-400 text-center\">\n              クリップを選択してレシピを適用\n            </div>\n          </div>\n        )}\n      </div>\n\n      {/* レシピ一覧 */}\n      <div className=\"flex-1 overflow-y-auto p-4\">\n        <div className=\"space-y-3\">\n          {filteredRecipes.map(recipe => {\n            const Icon = getRecipeIcon(recipe.icon);\n            const isPreviewMode = previewingRecipe === recipe.id;\n            \n            return (\n              <motion.div\n                key={recipe.id}\n                className=\"bg-dark-800 border border-dark-700 rounded-lg overflow-hidden hover:border-orange-500/50 transition-all\"\n                whileHover={{ scale: 1.01 }}\n                layout\n              >\n                <div className=\"p-4\">\n                  {/* レシピヘッダー */}\n                  <div className=\"flex items-start justify-between mb-3\">\n                    <div className=\"flex items-start space-x-3\">\n                      <div className=\"w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center flex-shrink-0\">\n                        <Icon className=\"w-4 h-4 text-white\" />\n                      </div>\n                      <div className=\"flex-1\">\n                        <h4 className=\"text-base font-semibold text-white mb-1\">{recipe.name}</h4>\n                        <p className=\"text-sm text-gray-400 mb-2\">{recipe.description}</p>\n                        \n                        {/* タグ */}\n                        <div className=\"flex space-x-2\">\n                          <span className=\"bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded text-xs\">\n                            {recipe.trigger === 'beat' ? 'ビート' : \n                             recipe.trigger === 'bar' ? '小節' : \n                             recipe.trigger === 'phrase' ? 'フレーズ' : 'マニュアル'}\n                          </span>\n                          <span className={`px-2 py-0.5 rounded text-xs ${\n                            recipe.difficulty === 'beginner' \n                              ? 'bg-green-500/20 text-green-300'\n                              : recipe.difficulty === 'intermediate'\n                              ? 'bg-yellow-500/20 text-yellow-300'\n                              : 'bg-red-500/20 text-red-300'\n                          }`}>\n                            {recipe.difficulty === 'beginner' ? '初心者' : \n                             recipe.difficulty === 'intermediate' ? '中級者' : '上級者'}\n                          </span>\n                        </div>\n                      </div>\n                    </div>\n                  </div>\n\n                  {/* パラメータ設定 */}\n                  <AnimatePresence>\n                    {isPreviewMode && (\n                      <motion.div\n                        initial={{ opacity: 0, height: 0 }}\n                        animate={{ opacity: 1, height: 'auto' }}\n                        exit={{ opacity: 0, height: 0 }}\n                        className=\"mb-3 pt-3 border-t border-dark-700\"\n                      >\n                        <h5 className=\"text-sm font-medium text-white mb-2\">パラメータ</h5>\n                        <div className=\"space-y-2\">\n                          {Object.entries(recipe.parameters).map(([key, defaultValue]) => (\n                            <div key={key} className=\"flex items-center justify-between\">\n                              <label className=\"text-xs text-gray-400 capitalize\">\n                                {key.replace(/([A-Z])/g, ' $1').toLowerCase()}\n                              </label>\n                              {typeof defaultValue === 'number' ? (\n                                <input\n                                  type=\"number\"\n                                  step={defaultValue < 1 ? \"0.01\" : \"1\"}\n                                  value={customParameters[recipe.id]?.[key] ?? defaultValue}\n                                  onChange={(e) => updateParameter(recipe.id, key, Number(e.target.value))}\n                                  className=\"w-20 bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-white\"\n                                />\n                              ) : typeof defaultValue === 'boolean' ? (\n                                <input\n                                  type=\"checkbox\"\n                                  checked={customParameters[recipe.id]?.[key] ?? defaultValue}\n                                  onChange={(e) => updateParameter(recipe.id, key, e.target.checked)}\n                                  className=\"w-4 h-4 text-orange-500 bg-dark-700 border-dark-600 rounded\"\n                                />\n                              ) : (\n                                <select\n                                  value={customParameters[recipe.id]?.[key] ?? defaultValue}\n                                  onChange={(e) => updateParameter(recipe.id, key, e.target.value)}\n                                  className=\"bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-white\"\n                                >\n                                  <option value={defaultValue}>{defaultValue}</option>\n                                </select>\n                              )}\n                            </div>\n                          ))}\n                        </div>\n                      </motion.div>\n                    )}\n                  </AnimatePresence>\n\n                  {/* アクションボタン */}\n                  <div className=\"flex space-x-2\">\n                    <button\n                      onClick={() => handlePreview(recipe)}\n                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm transition-all ${\n                        isPreviewMode\n                          ? 'bg-blue-500 text-white'\n                          : 'bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white'\n                      }`}\n                    >\n                      <Eye className=\"w-3 h-3\" />\n                      <span>{isPreviewMode ? '設定中' : 'プレビュー'}</span>\n                    </button>\n                    \n                    <button\n                      onClick={() => handleApply(recipe)}\n                      disabled={!selectedClip}\n                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm transition-all flex-1 justify-center ${\n                        !selectedClip\n                          ? 'bg-gray-600 cursor-not-allowed text-gray-400'\n                          : 'bg-orange-500 hover:bg-orange-600 text-white'\n                      }`}\n                    >\n                      <Download className=\"w-3 h-3\" />\n                      <span>適用</span>\n                    </button>\n                  </div>\n                </div>\n              </motion.div>\n            );\n          })}\n        </div>\n\n        {/* 検索結果なし */}\n        {filteredRecipes.length === 0 && (\n          <div className=\"text-center py-8\">\n            <Wand2 className=\"w-12 h-12 text-gray-600 mx-auto mb-3\" />\n            <h3 className=\"text-lg font-medium text-gray-400 mb-2\">レシピが見つかりません</h3>\n            <p className=\"text-sm text-gray-500\">検索条件を変更してお試しください</p>\n          </div>\n        )}\n      </div>\n\n      {/* ヘルプフッター */}\n      <div className=\"p-4 border-t border-dark-700\">\n        <div className=\"flex items-start space-x-2 text-xs text-gray-400\">\n          <Info className=\"w-3 h-3 mt-0.5 flex-shrink-0\" />\n          <div>\n            <p className=\"mb-1\">\n              Edit Recipesは楽曲のビートや小節に同期した自動編集を提供します。\n            </p>\n            <p>\n              {selectedClip ? 'レシピを選択して選択中のクリップに適用してください。' : 'まずタイムラインでクリップを選択してください。'}\n              {bpmInfo && ` 現在のBPM: ${bpmInfo.bpm}`}\n            </p>\n          </div>\n        </div>\n      </div>\n    </div>\n  );\n};\n\nexport default EditRecipesPanel;"
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Scissors, 
+  Sparkles, 
+  Palette, 
+  RotateCw, 
+  Zap, 
+  Play, 
+  Eye, 
+  Star,
+  Clock,
+  TrendingUp,
+  Filter,
+  Search,
+  Info,
+  ChevronDown,
+  Download,
+  Wand2,
+  Music,
+  Volume2,
+  Hash
+} from 'lucide-react';
+
+import { 
+  EditRecipesPanelProps,
+  EditRecipe,
+  TimelineClip,
+  BPMAnalysis
+} from '../../types';
+
+// プリセットレシピの定義
+const PRESET_RECIPES: EditRecipe[] = [
+  {
+    id: 'beat_cut',
+    name: 'ビートカット',
+    description: '音楽のビートに合わせて映像を自動カット',
+    icon: 'scissors',
+    category: 'cutting',
+    difficulty: 'beginner',
+    trigger: 'beat',
+    parameters: {
+      cutInterval: 'every_beat', // every_beat, every_2_beats, every_bar
+      transitionType: 'cut', // cut, crossfade, slide
+      transitionDuration: 0.1
+    }
+  },
+  {
+    id: 'beat_zoom',
+    name: 'ビートズーム',
+    description: 'ビートに合わせてズームイン/アウト',
+    icon: 'zoom-in',
+    category: 'animation',
+    difficulty: 'beginner',
+    trigger: 'beat',
+    parameters: {
+      zoomStrength: 0.1, // 0.05-0.3
+      zoomDirection: 'alternating', // in, out, alternating
+      easing: 'ease-out'
+    }
+  },
+  {
+    id: 'color_flash',
+    name: 'カラーフラッシュ',
+    description: 'ビートに合わせて色調を変化',
+    icon: 'palette',
+    category: 'color',
+    difficulty: 'intermediate',
+    trigger: 'beat',
+    parameters: {
+      flashIntensity: 0.3,
+      colorShift: 20, // hue shift in degrees
+      duration: 0.15
+    }
+  },
+  {
+    id: 'shake_effect',
+    name: 'シェイクエフェクト',
+    description: 'ドロップやビートで画面を揺らす',
+    icon: 'zap',
+    category: 'effects',
+    difficulty: 'intermediate',
+    trigger: 'beat',
+    parameters: {
+      intensity: 0.02, // 0.01-0.05
+      frequency: 20, // Hz
+      duration: 0.2,
+      direction: 'xy' // x, y, xy
+    }
+  },
+  {
+    id: 'slide_transition',
+    name: 'スライド遷移',
+    description: '小節の変わり目でスライド切り替え',
+    icon: 'arrow-right',
+    category: 'cutting',
+    difficulty: 'beginner',
+    trigger: 'bar',
+    parameters: {
+      direction: 'left', // left, right, up, down
+      duration: 0.5,
+      easing: 'ease-in-out'
+    }
+  },
+  {
+    id: 'blur_pulse',
+    name: 'ブラーパルス',
+    description: 'ビートに合わせてぼかしエフェクト',
+    icon: 'circle',
+    category: 'effects',
+    difficulty: 'advanced',
+    trigger: 'beat',
+    parameters: {
+      blurAmount: 3, // 1-10 pixels
+      pulseSpeed: 1.0,
+      fadeTime: 0.1
+    }
+  },
+  {
+    id: 'auto_ken_burns',
+    name: 'オートケンバーンズ',
+    description: 'BPMに同期したパン&ズーム',
+    icon: 'move',
+    category: 'animation',
+    difficulty: 'advanced',
+    trigger: 'bar',
+    parameters: {
+      panAmount: 0.1, // 0.05-0.2
+      zoomAmount: 0.15, // 0.1-0.3
+      duration: 'bar_length', // bar_length, 2_bars, 4_bars
+      randomDirection: true
+    }
+  },
+  {
+    id: 'beat_glow',
+    name: 'ビートグロー',
+    description: 'ビートで光の輪郭を追加',
+    icon: 'sun',
+    category: 'effects',
+    difficulty: 'intermediate',
+    trigger: 'beat',
+    parameters: {
+      glowColor: '#ffffff',
+      glowIntensity: 0.5,
+      glowSize: 20, // pixels
+      fadeOut: 0.3
+    }
+  }
+];
+
+/**
+ * Edit Recipesパネル
+ * ビート同期の自動編集機能を提供
+ */
+const EditRecipesPanel: React.FC<EditRecipesPanelProps> = ({
+  recipes = PRESET_RECIPES,
+  selectedClip,
+  bpmAnalysis,
+  onRecipeApply,
+  onRecipePreview
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
+  const [previewingRecipe, setPreviewingRecipe] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [customParameters, setCustomParameters] = useState<Record<string, any>>({});
+
+  // カテゴリの一覧
+  const categories = [
+    { id: 'all', name: '全て', icon: Hash },
+    { id: 'cutting', name: 'カット', icon: Scissors },
+    { id: 'animation', name: 'アニメーション', icon: RotateCw },
+    { id: 'effects', name: 'エフェクト', icon: Sparkles },
+    { id: 'color', name: 'カラー', icon: Palette }
+  ];
+
+  // フィルタリングされたレシピ
+  const filteredRecipes = useMemo(() => {
+    let filtered = recipes;
+
+    // テキスト検索
+    if (searchQuery) {
+      filtered = filtered.filter(recipe => 
+        recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        recipe.description.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // カテゴリフィルター
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(recipe => recipe.category === selectedCategory);
+    }
+
+    // 難易度フィルター
+    if (selectedDifficulty !== 'all') {
+      filtered = filtered.filter(recipe => recipe.difficulty === selectedDifficulty);
+    }
+
+    return filtered;
+  }, [recipes, searchQuery, selectedCategory, selectedDifficulty]);
+
+  // レシピアイコンの取得
+  const getRecipeIcon = (iconName: string) => {
+    const iconMap: Record<string, any> = {
+      'scissors': Scissors,
+      'sparkles': Sparkles,
+      'palette': Palette,
+      'rotate-cw': RotateCw,
+      'zap': Zap,
+      'zoom-in': Zap, // 適当なアイコンで代用
+      'arrow-right': RotateCw,
+      'circle': Sparkles,
+      'move': RotateCw,
+      'sun': Sparkles
+    };
+    return iconMap[iconName] || Sparkles;
+  };
+
+  // 難易度の色取得
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'beginner': return 'text-green-400';
+      case 'intermediate': return 'text-yellow-400';
+      case 'advanced': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  // レシピプレビュー
+  const handlePreview = (recipe: EditRecipe) => {
+    setPreviewingRecipe(previewingRecipe === recipe.id ? null : recipe.id);
+    onRecipePreview(recipe);
+  };
+
+  // レシピ適用
+  const handleApply = (recipe: EditRecipe) => {
+    if (!selectedClip) {
+      alert('クリップを選択してください');
+      return;
+    }
+
+    // カスタムパラメータがあれば適用
+    const finalRecipe = {
+      ...recipe,
+      parameters: {
+        ...recipe.parameters,
+        ...customParameters[recipe.id]
+      }
+    };
+
+    onRecipeApply(finalRecipe, selectedClip);
+  };
+
+  // パラメータの更新
+  const updateParameter = (recipeId: string, paramName: string, value: any) => {
+    setCustomParameters(prev => ({
+      ...prev,
+      [recipeId]: {
+        ...prev[recipeId],
+        [paramName]: value
+      }
+    }));
+  };
+
+  // BPM情報の表示
+  const bpmInfo = bpmAnalysis ? {
+    bpm: bpmAnalysis.bpm,
+    beatInterval: 60 / bpmAnalysis.bpm,
+    barInterval: (60 / bpmAnalysis.bpm) * 4,
+    totalBeats: bpmAnalysis.beatTimes.length,
+    totalBars: bpmAnalysis.bars.length
+  } : null;
+
+  return (
+    <div className="h-full bg-dark-900 flex flex-col">
+      {/* ヘッダー */}
+      <div className="p-4 border-b border-dark-700">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+            <Wand2 className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Edit Recipes</h2>
+            <p className="text-sm text-gray-400">ビート同期の自動編集</p>
+          </div>
+        </div>
+
+        {/* BPM情報 */}
+        {bpmInfo && (
+          <div className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-3 mb-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <Music className="w-4 h-4 text-purple-400" />
+              <span className="text-sm font-medium text-white">楽曲情報</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-400">BPM:</span>
+                <span className="text-white font-medium">{bpmInfo.bpm}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">ビート間隔:</span>
+                <span className="text-white">{bpmInfo.beatInterval.toFixed(2)}s</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">小節間隔:</span>
+                <span className="text-white">{bpmInfo.barInterval.toFixed(1)}s</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">総ビート数:</span>
+                <span className="text-white">{bpmInfo.totalBeats}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 検索バー */}
+        <div className="relative mb-3">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="レシピを検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-dark-700 border border-dark-600 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+          />
+        </div>
+
+        {/* カテゴリフィルター */}
+        <div className="flex space-x-1 mb-3 overflow-x-auto">
+          {categories.map(category => {
+            const Icon = category.icon;
+            return (
+              <button
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
+                className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all ${
+                  selectedCategory === category.id
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-dark-700 text-gray-400 hover:text-white'
+                }`}
+              >
+                <Icon className="w-3 h-3" />
+                <span>{category.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 難易度フィルター */}
+        <select
+          value={selectedDifficulty}
+          onChange={(e) => setSelectedDifficulty(e.target.value)}
+          className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-white mb-3"
+        >
+          <option value="all">全ての難易度</option>
+          <option value="beginner">初心者</option>
+          <option value="intermediate">中級者</option>
+          <option value="advanced">上級者</option>
+        </select>
+
+        {/* 選択中のクリップ情報 */}
+        {selectedClip ? (
+          <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-3">
+            <div className="flex items-center space-x-2 mb-1">
+              <Clock className="w-3 h-3 text-blue-400" />
+              <span className="text-xs font-medium text-blue-400">選択中のクリップ</span>
+            </div>
+            <div className="text-xs text-gray-300">
+              開始: {selectedClip.startTime.toFixed(1)}s • 
+              長さ: {selectedClip.duration.toFixed(1)}s • 
+              レイヤー: {selectedClip.layer + 1}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-500/20 border border-gray-500/30 rounded-lg p-3">
+            <div className="text-xs text-gray-400 text-center">
+              クリップを選択してレシピを適用
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* レシピ一覧 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-3">
+          {filteredRecipes.map(recipe => {
+            const Icon = getRecipeIcon(recipe.icon);
+            const isPreviewMode = previewingRecipe === recipe.id;
+            
+            return (
+              <motion.div
+                key={recipe.id}
+                className="bg-dark-800 border border-dark-700 rounded-lg overflow-hidden hover:border-orange-500/50 transition-all"
+                whileHover={{ scale: 1.01 }}
+                layout
+              >
+                <div className="p-4">
+                  {/* レシピヘッダー */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-base font-semibold text-white mb-1">{recipe.name}</h4>
+                        <p className="text-sm text-gray-400 mb-2">{recipe.description}</p>
+                        
+                        {/* タグ */}
+                        <div className="flex space-x-2">
+                          <span className="bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded text-xs">
+                            {recipe.trigger === 'beat' ? 'ビート' : 
+                             recipe.trigger === 'bar' ? '小節' : 
+                             recipe.trigger === 'phrase' ? 'フレーズ' : 'マニュアル'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            recipe.difficulty === 'beginner' 
+                              ? 'bg-green-500/20 text-green-300'
+                              : recipe.difficulty === 'intermediate'
+                              ? 'bg-yellow-500/20 text-yellow-300'
+                              : 'bg-red-500/20 text-red-300'
+                          }`}>
+                            {recipe.difficulty === 'beginner' ? '初心者' : 
+                             recipe.difficulty === 'intermediate' ? '中級者' : '上級者'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* パラメータ設定 */}
+                  <AnimatePresence>
+                    {isPreviewMode && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-3 pt-3 border-t border-dark-700"
+                      >
+                        <h5 className="text-sm font-medium text-white mb-2">パラメータ</h5>
+                        <div className="space-y-2">
+                          {Object.entries(recipe.parameters).map(([key, defaultValue]) => (
+                            <div key={key} className="flex items-center justify-between">
+                              <label className="text-xs text-gray-400 capitalize">
+                                {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                              </label>
+                              {typeof defaultValue === 'number' ? (
+                                <input
+                                  type="number"
+                                  step={defaultValue < 1 ? "0.01" : "1"}
+                                  value={customParameters[recipe.id]?.[key] ?? defaultValue}
+                                  onChange={(e) => updateParameter(recipe.id, key, Number(e.target.value))}
+                                  className="w-20 bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-white"
+                                />
+                              ) : typeof defaultValue === 'boolean' ? (
+                                <input
+                                  type="checkbox"
+                                  checked={customParameters[recipe.id]?.[key] ?? defaultValue}
+                                  onChange={(e) => updateParameter(recipe.id, key, e.target.checked)}
+                                  className="w-4 h-4 text-orange-500 bg-dark-700 border-dark-600 rounded"
+                                />
+                              ) : (
+                                <select
+                                  value={customParameters[recipe.id]?.[key] ?? defaultValue}
+                                  onChange={(e) => updateParameter(recipe.id, key, e.target.value)}
+                                  className="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-white"
+                                >
+                                  <option value={defaultValue}>{defaultValue}</option>
+                                </select>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* アクションボタン */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handlePreview(recipe)}
+                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm transition-all ${
+                        isPreviewMode
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>{isPreviewMode ? '設定中' : 'プレビュー'}</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => handleApply(recipe)}
+                      disabled={!selectedClip}
+                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm transition-all flex-1 justify-center ${
+                        !selectedClip
+                          ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                          : 'bg-orange-500 hover:bg-orange-600 text-white'
+                      }`}
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>適用</span>
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* 検索結果なし */}
+        {filteredRecipes.length === 0 && (
+          <div className="text-center py-8">
+            <Wand2 className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <h3 className="text-lg font-medium text-gray-400 mb-2">レシピが見つかりません</h3>
+            <p className="text-sm text-gray-500">検索条件を変更してお試しください</p>
+          </div>
+        )}
+      </div>
+
+      {/* ヘルプフッター */}
+      <div className="p-4 border-t border-dark-700">
+        <div className="flex items-start space-x-2 text-xs text-gray-400">
+          <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="mb-1">
+              Edit Recipesは楽曲のビートや小節に同期した自動編集を提供します。
+            </p>
+            <p>
+              {selectedClip ? 'レシピを選択して選択中のクリップに適用してください。' : 'まずタイムラインでクリップを選択してください。'}
+              {bpmInfo && ` 現在のBPM: ${bpmInfo.bpm}`}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EditRecipesPanel;

@@ -9,10 +9,10 @@ import Preview from '../components/preview/Preview';
 import PropertiesPanel from '../components/editor/PropertiesPanel';
 import PlaybackControls from '../components/editor/PlaybackControls';
 
-import { 
-  Play, 
-  Pause, 
-  SkipBack, 
+import {
+  Play,
+  Pause,
+  SkipBack,
   SkipForward,
   Volume2,
   Settings,
@@ -37,7 +37,6 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
-  Move3D,
   Square,
   Circle,
   Crown,

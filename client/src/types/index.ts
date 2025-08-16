@@ -45,10 +45,12 @@ export interface Notification {
 }
 
 // ===== MEDIA TYPES =====
+export type MediaType = 'image' | 'video' | 'audio';
+
 export interface MediaFile {
   id: string;
   name: string;
-  type: 'image' | 'video' | 'audio';
+  type: MediaType;
   url: string;
   thumbnail?: string;
   size: number; // bytes
@@ -66,14 +68,18 @@ export interface MediaFile {
 }
 
 // ===== PROJECT & TIMELINE TYPES =====
+export type EffectType = 'pan_zoom' | 'fade_in' | 'fade_out' | 'blur' | 'color_grade' | 'custom' | 'brightness' | 'contrast' | 'saturation' | 'speed' | 'fade';
+
 export interface Effect {
   id: string;
-  type: 'pan_zoom' | 'fade_in' | 'fade_out' | 'blur' | 'color_grade' | 'custom';
+  type: EffectType;
   parameters: {
     [key: string]: any;
   };
   enabled: boolean;
 }
+
+export type ClipEffect = Effect; // Alias for compatibility
 
 export interface Transition {
   type: 'cut' | 'crossfade' | 'slide' | 'wipe' | 'custom';
@@ -124,8 +130,10 @@ export interface OutputFormat {
   quality: 'low' | 'medium' | 'high' | 'ultra';
 }
 
+export type Resolution = '720p' | '1080p' | '4K' | '9:16' | '16:9' | '1:1' | 'custom';
+
 export interface ProjectSettings {
-  resolution: '720p' | '1080p' | '4K' | '9:16' | 'custom';
+  resolution: Resolution;
   frameRate: 24 | 30 | 60;
   duration: number; // seconds
   outputFormat: OutputFormat;
@@ -715,7 +723,11 @@ export const RESOLUTION_PRESETS = {
   '720p': { width: 1280, height: 720 },
   '1080p': { width: 1920, height: 1080 },
   '1440p': { width: 2560, height: 1440 },
-  '4K': { width: 3840, height: 2160 }
+  '4K': { width: 3840, height: 2160 },
+  '9:16': { width: 1080, height: 1920 },
+  '16:9': { width: 1920, height: 1080 },
+  '1:1': { width: 1080, height: 1080 },
+  'custom': { width: 1920, height: 1080 }
 } as const;
 
 export type ResolutionPreset = keyof typeof RESOLUTION_PRESETS;

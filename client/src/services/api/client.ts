@@ -515,5 +515,5 @@ export class TypedWebSocket {
   }
 }
 
-export { apiClient, APIError };
+export { apiClient };
 export default apiClient;

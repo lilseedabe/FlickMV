@@ -1,1 +1,471 @@
-import React, { useState, useMemo, useEffect } from 'react';\nimport { motion, AnimatePresence } from 'framer-motion';\nimport { \n  Search, \n  Filter, \n  Heart, \n  Star, \n  Play, \n  Download, \n  Crown, \n  Sparkles,\n  Music,\n  Palette,\n  Zap,\n  Eye,\n  ChevronDown,\n  X,\n  Info,\n  TrendingUp\n} from 'lucide-react';\n\nimport { \n  PresetLibraryProps, \n  MusicPreset, \n  PresetCategory,\n  BPMAnalysis \n} from '../../types';\n\n/**\n * BPM対応プリセットライブラリ\n * 楽曲のBPMに基づいて最適なプリセットを推奨\n */\nconst PresetLibrary: React.FC<PresetLibraryProps> = ({\n  presets,\n  categories,\n  selectedGenre,\n  selectedBPMRange,\n  onPresetSelect,\n  onPresetFavorite,\n  onGenreFilter,\n  onBPMFilter\n}) => {\n  const [searchQuery, setSearchQuery] = useState('');\n  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'recent' | 'bpm'>('popular');\n  const [showFilters, setShowFilters] = useState(false);\n  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');\n  const [previewingPreset, setPreviewingPreset] = useState<string | null>(null);\n  const [favoritedPresets, setFavoritedPresets] = useState<Set<string>>(new Set());\n  const [currentBPM, setCurrentBPM] = useState<number | null>(null);\n\n  // BPMレンジのプリセット定義\n  const bpmRanges = [\n    { label: '全て', range: null },\n    { label: 'スロー (60-90)', range: [60, 90] as [number, number] },\n    { label: 'ミディアム (90-120)', range: [90, 120] as [number, number] },\n    { label: 'アップテンポ (120-140)', range: [120, 140] as [number, number] },\n    { label: 'ファスト (140+)', range: [140, 200] as [number, number] }\n  ];\n\n  // フィルタリングされたプリセット\n  const filteredPresets = useMemo(() => {\n    let filtered = presets;\n\n    // テキスト検索\n    if (searchQuery) {\n      filtered = filtered.filter(preset => \n        preset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||\n        preset.description.toLowerCase().includes(searchQuery.toLowerCase()) ||\n        preset.genre.toLowerCase().includes(searchQuery.toLowerCase()) ||\n        preset.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))\n      );\n    }\n\n    // ジャンルフィルター\n    if (selectedGenre) {\n      filtered = filtered.filter(preset => preset.genre === selectedGenre);\n    }\n\n    // BPMフィルター\n    if (selectedBPMRange) {\n      filtered = filtered.filter(preset => {\n        const [presetMin, presetMax] = preset.bpmRange;\n        const [filterMin, filterMax] = selectedBPMRange;\n        return presetMin <= filterMax && presetMax >= filterMin;\n      });\n    }\n\n    // 難易度フィルター\n    if (selectedDifficulty) {\n      filtered = filtered.filter(preset => preset.difficulty === selectedDifficulty);\n    }\n\n    // ソート\n    switch (sortBy) {\n      case 'popular':\n        return filtered.sort((a, b) => b.uses - a.uses);\n      case 'rating':\n        return filtered.sort((a, b) => b.rating - a.rating);\n      case 'recent':\n        return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());\n      case 'bpm':\n        if (currentBPM) {\n          return filtered.sort((a, b) => {\n            const aDistance = Math.min(\n              Math.abs(a.bpmRange[0] - currentBPM),\n              Math.abs(a.bpmRange[1] - currentBPM)\n            );\n            const bDistance = Math.min(\n              Math.abs(b.bpmRange[0] - currentBPM),\n              Math.abs(b.bpmRange[1] - currentBPM)\n            );\n            return aDistance - bDistance;\n          });\n        }\n        return filtered;\n      default:\n        return filtered;\n    }\n  }, [presets, searchQuery, selectedGenre, selectedBPMRange, selectedDifficulty, sortBy, currentBPM]);\n\n  // BPMに基づく推奨プリセット\n  const recommendedPresets = useMemo(() => {\n    if (!currentBPM) return [];\n    \n    return presets\n      .filter(preset => {\n        const [min, max] = preset.bpmRange;\n        return currentBPM >= min && currentBPM <= max;\n      })\n      .sort((a, b) => b.rating - a.rating)\n      .slice(0, 3);\n  }, [presets, currentBPM]);\n\n  // プリセットプレビューの処理\n  const handlePresetPreview = (presetId: string) => {\n    setPreviewingPreset(previewingPreset === presetId ? null : presetId);\n  };\n\n  // お気に入りの切り替え\n  const handleFavoriteToggle = (presetId: string) => {\n    const newFavorites = new Set(favoritedPresets);\n    if (newFavorites.has(presetId)) {\n      newFavorites.delete(presetId);\n    } else {\n      newFavorites.add(presetId);\n    }\n    setFavoritedPresets(newFavorites);\n    onPresetFavorite(presetId);\n  };\n\n  // プリセット適用\n  const handlePresetApply = (preset: MusicPreset) => {\n    onPresetSelect(preset);\n    // 使用回数を増やす（実際のアプリではAPIを呼ぶ）\n    console.log('プリセット適用:', preset.name);\n  };\n\n  // BPMの設定（エディターから受け取る）\n  useEffect(() => {\n    // 実際の実装では、親コンポーネントからBPMを受け取る\n    // ここではサンプル値を設定\n    setCurrentBPM(128);\n  }, []);\n\n  return (\n    <div className=\"h-full flex flex-col bg-dark-900\">\n      {/* ヘッダー */}\n      <div className=\"p-4 border-b border-dark-700\">\n        <div className=\"flex items-center justify-between mb-4\">\n          <div className=\"flex items-center space-x-3\">\n            <div className=\"w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center\">\n              <Sparkles className=\"w-4 h-4 text-white\" />\n            </div>\n            <div>\n              <h2 className=\"text-lg font-semibold text-white\">プリセットライブラリ</h2>\n              <p className=\"text-sm text-gray-400\">楽曲に最適なエフェクトを選択</p>\n            </div>\n          </div>\n          \n          {currentBPM && (\n            <div className=\"flex items-center space-x-2 bg-purple-500/20 px-3 py-2 rounded-lg\">\n              <Music className=\"w-4 h-4 text-purple-400\" />\n              <span className=\"text-sm font-medium text-white\">{currentBPM} BPM</span>\n            </div>\n          )}\n        </div>\n\n        {/* 検索バー */}\n        <div className=\"relative mb-3\">\n          <Search className=\"w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2\" />\n          <input\n            type=\"text\"\n            placeholder=\"プリセットを検索...\"\n            value={searchQuery}\n            onChange={(e) => setSearchQuery(e.target.value)}\n            className=\"w-full bg-dark-700 border border-dark-600 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500\"\n          />\n        </div>\n\n        {/* フィルター行 */}\n        <div className=\"flex items-center space-x-2\">\n          <button\n            onClick={() => setShowFilters(!showFilters)}\n            className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm transition-all ${\n              showFilters \n                ? 'bg-purple-500 text-white' \n                : 'bg-dark-700 text-gray-400 hover:text-white'\n            }`}\n          >\n            <Filter className=\"w-3 h-3\" />\n            <span>フィルター</span>\n            <ChevronDown className={`w-3 h-3 transition-transform ${\n              showFilters ? 'rotate-180' : ''\n            }`} />\n          </button>\n\n          <select\n            value={sortBy}\n            onChange={(e) => setSortBy(e.target.value as any)}\n            className=\"bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm text-white\"\n          >\n            <option value=\"popular\">人気順</option>\n            <option value=\"rating\">評価順</option>\n            <option value=\"recent\">新着順</option>\n            {currentBPM && <option value=\"bpm\">BPM適合度</option>}\n          </select>\n\n          <div className=\"text-xs text-gray-400\">\n            {filteredPresets.length}件表示\n          </div>\n        </div>\n\n        {/* フィルターパネル */}\n        <AnimatePresence>\n          {showFilters && (\n            <motion.div\n              initial={{ opacity: 0, height: 0 }}\n              animate={{ opacity: 1, height: 'auto' }}\n              exit={{ opacity: 0, height: 0 }}\n              className=\"mt-3 pt-3 border-t border-dark-700\"\n            >\n              <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n                {/* ジャンルフィルター */}\n                <div>\n                  <label className=\"block text-xs font-medium text-gray-400 mb-2\">ジャンル</label>\n                  <select\n                    value={selectedGenre || ''}\n                    onChange={(e) => onGenreFilter(e.target.value)}\n                    className=\"w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm text-white\"\n                  >\n                    <option value=\"\">全てのジャンル</option>\n                    {categories.map(category => (\n                      <option key={category.id} value={category.name}>\n                        {category.name}\n                      </option>\n                    ))}\n                  </select>\n                </div>\n\n                {/* BPMフィルター */}\n                <div>\n                  <label className=\"block text-xs font-medium text-gray-400 mb-2\">BPM範囲</label>\n                  <select\n                    value={selectedBPMRange ? `${selectedBPMRange[0]}-${selectedBPMRange[1]}` : ''}\n                    onChange={(e) => {\n                      const range = bpmRanges.find(r => \n                        r.range && `${r.range[0]}-${r.range[1]}` === e.target.value\n                      );\n                      onBPMFilter(range?.range || [0, 200]);\n                    }}\n                    className=\"w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm text-white\"\n                  >\n                    {bpmRanges.map((range, index) => (\n                      <option \n                        key={index} \n                        value={range.range ? `${range.range[0]}-${range.range[1]}` : ''}\n                      >\n                        {range.label}\n                      </option>\n                    ))}\n                  </select>\n                </div>\n\n                {/* 難易度フィルター */}\n                <div>\n                  <label className=\"block text-xs font-medium text-gray-400 mb-2\">難易度</label>\n                  <select\n                    value={selectedDifficulty}\n                    onChange={(e) => setSelectedDifficulty(e.target.value)}\n                    className=\"w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm text-white\"\n                  >\n                    <option value=\"\">全ての難易度</option>\n                    <option value=\"beginner\">初心者</option>\n                    <option value=\"intermediate\">中級者</option>\n                    <option value=\"advanced\">上級者</option>\n                  </select>\n                </div>\n              </div>\n            </motion.div>\n          )}\n        </AnimatePresence>\n      </div>\n\n      {/* 推奨プリセット */}\n      {recommendedPresets.length > 0 && (\n        <div className=\"p-4 border-b border-dark-700\">\n          <div className=\"flex items-center space-x-2 mb-3\">\n            <TrendingUp className=\"w-4 h-4 text-green-400\" />\n            <h3 className=\"text-sm font-medium text-white\">あなたの楽曲にオススメ</h3>\n            <span className=\"text-xs text-gray-400\">({currentBPM} BPMに最適)</span>\n          </div>\n          \n          <div className=\"grid grid-cols-3 gap-3\">\n            {recommendedPresets.map(preset => (\n              <div\n                key={preset.id}\n                className=\"bg-green-500/10 border border-green-500/30 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-all\"\n                onClick={() => handlePresetApply(preset)}\n              >\n                <div className=\"text-sm font-medium text-white truncate\">{preset.name}</div>\n                <div className=\"text-xs text-gray-400\">{preset.bpmRange[0]}-{preset.bpmRange[1]} BPM</div>\n                <div className=\"flex items-center space-x-1 mt-1\">\n                  <Star className=\"w-3 h-3 text-yellow-400\" />\n                  <span className=\"text-xs text-gray-300\">{preset.rating.toFixed(1)}</span>\n                </div>\n              </div>\n            ))}\n          </div>\n        </div>\n      )}\n\n      {/* プリセット一覧 */}\n      <div className=\"flex-1 overflow-y-auto p-4\">\n        <div className=\"grid grid-cols-1 gap-4\">\n          {filteredPresets.map(preset => (\n            <motion.div\n              key={preset.id}\n              className=\"bg-dark-800 border border-dark-700 rounded-lg overflow-hidden hover:border-purple-500/50 transition-all\"\n              whileHover={{ scale: 1.01 }}\n              layout\n            >\n              <div className=\"p-4\">\n                {/* プリセットヘッダー */}\n                <div className=\"flex items-start justify-between mb-3\">\n                  <div className=\"flex-1\">\n                    <div className=\"flex items-center space-x-2 mb-1\">\n                      <h4 className=\"text-lg font-semibold text-white\">{preset.name}</h4>\n                      {preset.premium && (\n                        <Crown className=\"w-4 h-4 text-yellow-400\" />\n                      )}\n                    </div>\n                    <p className=\"text-sm text-gray-400 mb-2\">{preset.description}</p>\n                    \n                    {/* タグ */}\n                    <div className=\"flex flex-wrap gap-1\">\n                      <span className=\"bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded text-xs\">\n                        {preset.genre}\n                      </span>\n                      <span className=\"bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-xs\">\n                        {preset.bpmRange[0]}-{preset.bpmRange[1]} BPM\n                      </span>\n                      <span className={`px-2 py-0.5 rounded text-xs ${\n                        preset.difficulty === 'beginner' \n                          ? 'bg-green-500/20 text-green-300'\n                          : preset.difficulty === 'intermediate'\n                          ? 'bg-yellow-500/20 text-yellow-300'\n                          : 'bg-red-500/20 text-red-300'\n                      }`}>\n                        {preset.difficulty === 'beginner' ? '初心者' : \n                         preset.difficulty === 'intermediate' ? '中級者' : '上級者'}\n                      </span>\n                    </div>\n                  </div>\n\n                  {/* 評価とお気に入り */}\n                  <div className=\"flex flex-col items-end space-y-2\">\n                    <div className=\"flex items-center space-x-1\">\n                      <Star className=\"w-4 h-4 text-yellow-400\" />\n                      <span className=\"text-sm text-white\">{preset.rating.toFixed(1)}</span>\n                    </div>\n                    <button\n                      onClick={() => handleFavoriteToggle(preset.id)}\n                      className={`p-1 rounded transition-all ${\n                        favoritedPresets.has(preset.id)\n                          ? 'text-red-400 hover:text-red-300'\n                          : 'text-gray-400 hover:text-red-400'\n                      }`}\n                    >\n                      <Heart className={`w-4 h-4 ${\n                        favoritedPresets.has(preset.id) ? 'fill-current' : ''\n                      }`} />\n                    </button>\n                  </div>\n                </div>\n\n                {/* プリセット詳細 */}\n                <div className=\"flex items-center justify-between text-xs text-gray-400 mb-3\">\n                  <span>{preset.uses.toLocaleString()}回使用</span>\n                  <span>{preset.effects.length}個のエフェクト</span>\n                  {preset.author && <span>by {preset.author}</span>}\n                </div>\n\n                {/* アクションボタン */}\n                <div className=\"flex space-x-2\">\n                  <button\n                    onClick={() => handlePresetPreview(preset.id)}\n                    className=\"flex items-center space-x-1 bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded-lg text-sm transition-all\"\n                  >\n                    <Eye className=\"w-3 h-3\" />\n                    <span>プレビュー</span>\n                  </button>\n                  \n                  <button\n                    onClick={() => handlePresetApply(preset)}\n                    className=\"flex items-center space-x-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm transition-all flex-1 justify-center\"\n                  >\n                    <Download className=\"w-3 h-3\" />\n                    <span>適用</span>\n                  </button>\n                </div>\n\n                {/* プレビュー展開 */}\n                <AnimatePresence>\n                  {previewingPreset === preset.id && (\n                    <motion.div\n                      initial={{ opacity: 0, height: 0 }}\n                      animate={{ opacity: 1, height: 'auto' }}\n                      exit={{ opacity: 0, height: 0 }}\n                      className=\"mt-3 pt-3 border-t border-dark-700\"\n                    >\n                      <div className=\"text-sm text-gray-300\">\n                        <div className=\"mb-2\">\n                          <span className=\"text-gray-400\">エフェクト:</span>\n                          <div className=\"mt-1 flex flex-wrap gap-1\">\n                            {preset.effects.map((effect, index) => (\n                              <span key={index} className=\"bg-dark-700 px-2 py-1 rounded text-xs\">\n                                {effect.type}\n                              </span>\n                            ))}\n                          </div>\n                        </div>\n                        \n                        {preset.colorGrading && (\n                          <div className=\"mb-2\">\n                            <span className=\"text-gray-400\">カラーグレーディング:</span>\n                            <div className=\"mt-1 text-xs space-y-1\">\n                              <div>明度: {preset.colorGrading.brightness}</div>\n                              <div>コントラスト: {preset.colorGrading.contrast}</div>\n                              <div>彩度: {preset.colorGrading.saturation}</div>\n                            </div>\n                          </div>\n                        )}\n                        \n                        <div className=\"flex items-center space-x-4 text-xs\">\n                          <span>アニメーション: {preset.animationStyle}</span>\n                          <span>ビート同期: {preset.beatSync ? '有効' : '無効'}</span>\n                        </div>\n                      </div>\n                    </motion.div>\n                  )}\n                </AnimatePresence>\n              </div>\n            </motion.div>\n          ))}\n        </div>\n\n        {/* 検索結果なし */}\n        {filteredPresets.length === 0 && (\n          <div className=\"text-center py-8\">\n            <Sparkles className=\"w-12 h-12 text-gray-600 mx-auto mb-3\" />\n            <h3 className=\"text-lg font-medium text-gray-400 mb-2\">プリセットが見つかりません</h3>\n            <p className=\"text-sm text-gray-500\">検索条件を変更してお試しください</p>\n          </div>\n        )}\n      </div>\n\n      {/* ヘルプフッター */}\n      <div className=\"p-4 border-t border-dark-700\">\n        <div className=\"flex items-center space-x-2 text-xs text-gray-400\">\n          <Info className=\"w-3 h-3\" />\n          <span>\n            プリセットは楽曲のBPMに基づいて自動的に最適化されます。\n            {currentBPM && `現在のBPM (${currentBPM}) に最も適したプリセットが上部に表示されます。`}\n          </span>\n        </div>\n      </div>\n    </div>\n  );\n};\n\nexport default PresetLibrary;"
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Search,
+  Filter,
+  Heart,
+  Star,
+  Download,
+  Crown,
+  Sparkles,
+  Music,
+  Eye,
+  ChevronDown,
+  Info,
+  TrendingUp
+} from 'lucide-react';
+
+import {
+  PresetLibraryProps,
+  MusicPreset
+} from '../../types';
+
+/**
+ * BPM対応プリセットライブラリ
+ * 楽曲のBPMに基づいて最適なプリセットを推奨
+ */
+const PresetLibrary: React.FC<PresetLibraryProps> = ({
+  presets,
+  categories,
+  selectedGenre,
+  selectedBPMRange,
+  onPresetSelect,
+  onPresetFavorite,
+  onGenreFilter,
+  onBPMFilter
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'recent' | 'bpm'>('popular');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
+  const [previewingPreset, setPreviewingPreset] = useState<string | null>(null);
+  const [favoritedPresets, setFavoritedPresets] = useState<Set<string>>(new Set());
+  const [currentBPM, setCurrentBPM] = useState<number | null>(null);
+
+  // BPMレンジのプリセット定義
+  const bpmRanges: { label: string; range: [number, number] | null }[] = [
+    { label: '全て', range: null },
+    { label: 'スロー (60-90)', range: [60, 90] },
+    { label: 'ミディアム (90-120)', range: [90, 120] },
+    { label: 'アップテンポ (120-140)', range: [120, 140] },
+    { label: 'ファスト (140+)', range: [140, 200] }
+  ];
+
+  // フィルタリングされたプリセット
+  const filteredPresets = useMemo(() => {
+    let filtered = presets;
+
+    // テキスト検索
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((preset) =>
+        preset.name.toLowerCase().includes(q) ||
+        preset.description.toLowerCase().includes(q) ||
+        preset.genre.toLowerCase().includes(q) ||
+        preset.tags.some((tag) => tag.toLowerCase().includes(q))
+      );
+    }
+
+    // ジャンルフィルター
+    if (selectedGenre) {
+      filtered = filtered.filter((preset) => preset.genre === selectedGenre);
+    }
+
+    // BPMフィルター
+    if (selectedBPMRange) {
+      filtered = filtered.filter((preset) => {
+        const [presetMin, presetMax] = preset.bpmRange;
+        const [filterMin, filterMax] = selectedBPMRange;
+        return presetMin <= filterMax && presetMax >= filterMin;
+      });
+    }
+
+    // 難易度フィルター
+    if (selectedDifficulty) {
+      filtered = filtered.filter((preset) => preset.difficulty === selectedDifficulty);
+    }
+
+    // ソート
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case 'popular':
+        sorted.sort((a, b) => b.uses - a.uses);
+        break;
+      case 'rating':
+        sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        break;
+      case 'recent':
+        sorted.sort(
+          (a, b) =>
+            new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime()
+        );
+        break;
+      case 'bpm':
+        if (currentBPM) {
+          sorted.sort((a, b) => {
+            const aDist = Math.min(Math.abs(a.bpmRange[0] - currentBPM), Math.abs(a.bpmRange[1] - currentBPM));
+            const bDist = Math.min(Math.abs(b.bpmRange[0] - currentBPM), Math.abs(b.bpmRange[1] - currentBPM));
+            return aDist - bDist;
+          });
+        }
+        break;
+      default:
+        break;
+    }
+
+    return sorted;
+  }, [presets, searchQuery, selectedGenre, selectedBPMRange, selectedDifficulty, sortBy, currentBPM]);
+
+  // BPMに基づく推奨プリセット
+  const recommendedPresets = useMemo(() => {
+    if (!currentBPM) return [];
+    return presets
+      .filter((preset) => {
+        const [min, max] = preset.bpmRange;
+        return currentBPM >= min && currentBPM <= max;
+      })
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+      .slice(0, 3);
+  }, [presets, currentBPM]);
+
+  // BPM の設定（エディターから受け取る想定、現状はサンプル値）
+  useEffect(() => {
+    setCurrentBPM(128);
+  }, []);
+
+  // UI ハンドラ
+  const handlePresetPreview = (presetId: string) => {
+    setPreviewingPreset(previewingPreset === presetId ? null : presetId);
+  };
+
+  const handleFavoriteToggle = (presetId: string) => {
+    const next = new Set(favoritedPresets);
+    if (next.has(presetId)) next.delete(presetId);
+    else next.add(presetId);
+    setFavoritedPresets(next);
+    onPresetFavorite(presetId);
+  };
+
+  const handlePresetApply = (preset: MusicPreset) => {
+    onPresetSelect(preset);
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-dark-900">
+      {/* ヘッダー */}
+      <div className="p-4 border-b border-dark-700">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">プリセットライブラリ</h2>
+              <p className="text-sm text-gray-400">楽曲に最適なエフェクトを選択</p>
+            </div>
+          </div>
+
+          {currentBPM && (
+            <div className="flex items-center space-x-2 bg-purple-500/20 px-3 py-2 rounded-lg">
+              <Music className="w-4 h-4 text-purple-400" />
+              <span className="text-sm font-medium text-white">{currentBPM} BPM</span>
+            </div>
+          )}
+        </div>
+
+        {/* 検索バー */}
+        <div className="relative mb-3">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="プリセットを検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-dark-700 border border-dark-600 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        {/* フィルター行 */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm transition-all ${
+              showFilters ? 'bg-purple-500 text-white' : 'bg-dark-700 text-gray-400 hover:text-white'
+            }`}
+          >
+            <Filter className="w-3 h-3" />
+            <span>フィルター</span>
+            <ChevronDown className={`w-3 h-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+          </button>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm text-white"
+          >
+            <option value="popular">人気順</option>
+            <option value="rating">評価順</option>
+            <option value="recent">新着順</option>
+            {currentBPM && <option value="bpm">BPM適合度</option>}
+          </select>
+
+          <div className="text-xs text-gray-400">{filteredPresets.length}件表示</div>
+        </div>
+
+        {/* フィルターパネル */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-3 pt-3 border-t border-dark-700"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* ジャンルフィルター */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">ジャンル</label>
+                  <select
+                    value={selectedGenre || ''}
+                    onChange={(e) => onGenreFilter(e.target.value)}
+                    className="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">全てのジャンル</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* BPMフィルター */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">BPM範囲</label>
+                  <select
+                    value={selectedBPMRange ? `${selectedBPMRange[0]}-${selectedBPMRange[1]}` : ''}
+                    onChange={(e) => {
+                      const range = bpmRanges.find((r) => r.range && `${r.range[0]}-${r.range[1]}` === e.target.value);
+                      onBPMFilter(range?.range || [0, 200]);
+                    }}
+                    className="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm text-white"
+                  >
+                    {bpmRanges.map((range, idx) => (
+                      <option key={idx} value={range.range ? `${range.range[0]}-${range.range[1]}` : ''}>
+                        {range.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 難易度フィルター */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">難易度</label>
+                  <select
+                    value={selectedDifficulty}
+                    onChange={(e) => setSelectedDifficulty(e.target.value)}
+                    className="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">全ての難易度</option>
+                    <option value="beginner">初心者</option>
+                    <option value="intermediate">中級者</option>
+                    <option value="advanced">上級者</option>
+                  </select>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 推奨プリセット */}
+      {recommendedPresets.length > 0 && (
+        <div className="p-4 border-b border-dark-700">
+          <div className="flex items-center space-x-2 mb-3">
+            <TrendingUp className="w-4 h-4 text-green-400" />
+            <h3 className="text-sm font-medium text-white">あなたの楽曲にオススメ</h3>
+            <span className="text-xs text-gray-400">({currentBPM} BPMに最適)</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {recommendedPresets.map((preset) => (
+              <div
+                key={preset.id}
+                className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-all"
+                onClick={() => handlePresetApply(preset)}
+              >
+                <div className="text-sm font-medium text-white truncate">{preset.name}</div>
+                <div className="text-xs text-gray-400">
+                  {preset.bpmRange[0]}-{preset.bpmRange[1]} BPM
+                </div>
+                <div className="flex items-center space-x-1 mt-1">
+                  <Star className="w-3 h-3 text-yellow-400" />
+                  <span className="text-xs text-gray-300">{(preset.rating || 0).toFixed(1)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* プリセット一覧 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-1 gap-4">
+          {filteredPresets.map((preset) => (
+            <motion.div
+              key={preset.id}
+              className="bg-dark-800 border border-dark-700 rounded-lg overflow-hidden hover:border-purple-500/50 transition-all"
+              whileHover={{ scale: 1.01 }}
+              layout
+            >
+              <div className="p-4">
+                {/* プリセットヘッダー */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <h4 className="text-lg font-semibold text-white">{preset.name}</h4>
+                      {preset.premium && <Crown className="w-4 h-4 text-yellow-400" />}
+                    </div>
+                    <p className="text-sm text-gray-400 mb-2">{preset.description}</p>
+
+                    {/* タグ */}
+                    <div className="flex flex-wrap gap-1">
+                      <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded text-xs">
+                        {preset.genre}
+                      </span>
+                      <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-xs">
+                        {preset.bpmRange[0]}-{preset.bpmRange[1]} BPM
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs ${
+                          preset.difficulty === 'beginner'
+                            ? 'bg-green-500/20 text-green-300'
+                            : preset.difficulty === 'intermediate'
+                            ? 'bg-yellow-500/20 text-yellow-300'
+                            : 'bg-red-500/20 text-red-300'
+                        }`}
+                      >
+                        {preset.difficulty === 'beginner'
+                          ? '初心者'
+                          : preset.difficulty === 'intermediate'
+                          ? '中級者'
+                          : '上級者'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 評価とお気に入り */}
+                  <div className="flex flex-col items-end space-y-2">
+                    <div className="flex items-center space-x-1">
+                      <Star className="w-4 h-4 text-yellow-400" />
+                      <span className="text-sm text-white">{(preset.rating || 0).toFixed(1)}</span>
+                    </div>
+                    <button
+                      onClick={() => handleFavoriteToggle(preset.id)}
+                      className={`p-1 rounded transition-all ${
+                        favoritedPresets.has(preset.id)
+                          ? 'text-red-400 hover:text-red-300'
+                          : 'text-gray-400 hover:text-red-400'
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${favoritedPresets.has(preset.id) ? 'fill-current' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* プリセット詳細 */}
+                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+                  <span>{preset.uses.toLocaleString()}回使用</span>
+                  <span>{preset.effects.length}個のエフェクト</span>
+                  {preset.author && <span>by {preset.author}</span>}
+                </div>
+
+                {/* アクションボタン */}
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handlePresetPreview(preset.id)}
+                    className="flex items-center space-x-1 bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded-lg text-sm transition-all"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>プレビュー</span>
+                  </button>
+
+                  <button
+                    onClick={() => handlePresetApply(preset)}
+                    className="flex items-center space-x-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm transition-all flex-1 justify-center"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>適用</span>
+                  </button>
+                </div>
+
+                {/* プレビュー展開 */}
+                <AnimatePresence>
+                  {previewingPreset === preset.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-3 pt-3 border-t border-dark-700"
+                    >
+                      <div className="text-sm text-gray-300">
+                        <div className="mb-2">
+                          <span className="text-gray-400">エフェクト:</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {preset.effects.map((effect, index) => (
+                              <span key={index} className="bg-dark-700 px-2 py-1 rounded text-xs">
+                                {effect.type}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {preset.colorGrading && (
+                          <div className="mb-2">
+                            <span className="text-gray-400">カラーグレーディング:</span>
+                            <div className="mt-1 text-xs space-y-1">
+                              <div>明度: {preset.colorGrading.brightness}</div>
+                              <div>コントラスト: {preset.colorGrading.contrast}</div>
+                              <div>彩度: {preset.colorGrading.saturation}</div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center space-x-4 text-xs">
+                          <span>アニメーション: {preset.animationStyle}</span>
+                          <span>ビート同期: {preset.beatSync ? '有効' : '無効'}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* 検索結果なし */}
+        {filteredPresets.length === 0 && (
+          <div className="text-center py-8">
+            <Sparkles className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <h3 className="text-lg font-medium text-gray-400 mb-2">プリセットが見つかりません</h3>
+            <p className="text-sm text-gray-500">検索条件を変更してお試しください</p>
+          </div>
+        )}
+      </div>
+
+      {/* ヘルプフッター */}
+      <div className="p-4 border-t border-dark-700">
+        <div className="flex items-center space-x-2 text-xs text-gray-400">
+          <Info className="w-3 h-3" />
+          <span>
+            プリセットは楽曲のBPMに基づいて自動的に最適化されます。
+            {currentBPM && ` 現在のBPM (${currentBPM}) に最も適したプリセットが上部に表示されます。`}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PresetLibrary;
