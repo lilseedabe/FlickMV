@@ -71,6 +71,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [registeredUsers, setRegisteredUsers] = useState<Array<{email: string, password: string, userData: User}>>([]);
 
   // Initialize user data
   useEffect(() => {
@@ -78,12 +79,25 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         setLoading(true);
         
+        // Load registered users from localStorage
+        const savedUsers = localStorage.getItem('flickmv_registered_users');
+        if (savedUsers) {
+          setRegisteredUsers(JSON.parse(savedUsers));
+        }
+        
         // Check if user is logged in (check localStorage, token, etc.)
         const token = localStorage.getItem('authToken');
         if (token) {
           // In real app, validate token and fetch user data
           await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-          setUser(mockUser);
+          
+          // Try to load current user from localStorage
+          const currentUserData = localStorage.getItem('flickmv_current_user');
+          if (currentUserData) {
+            setUser(JSON.parse(currentUserData));
+          } else {
+            setUser(mockUser);
+          }
           setNotifications(mockNotifications);
         }
       } catch (err) {
@@ -106,13 +120,27 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Mock validation
+      // Check demo account
       if (email === 'demo@flickmv.com' && password === 'demo123') {
         localStorage.setItem('authToken', 'mock_token_123');
+        localStorage.setItem('flickmv_current_user', JSON.stringify(mockUser));
         setUser(mockUser);
         setNotifications(mockNotifications);
+        return;
+      }
+      
+      // Check registered users
+      const registeredUser = registeredUsers.find(
+        user => user.email === email && user.password === password
+      );
+      
+      if (registeredUser) {
+        localStorage.setItem('authToken', 'mock_token_123');
+        localStorage.setItem('flickmv_current_user', JSON.stringify(registeredUser.userData));
+        setUser(registeredUser.userData);
+        setNotifications(mockNotifications);
       } else {
-        throw new Error('Invalid credentials');
+        throw new Error('メールアドレスまたはパスワードが間違っています');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -127,6 +155,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setLoading(true);
       setError(null);
       
+      // Check if email already exists
+      const existingUser = registeredUsers.find(user => user.email === email);
+      if (existingUser) {
+        throw new Error('このメールアドレスは既に登録されています');
+      }
+      
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
@@ -140,7 +174,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         lastLoginAt: new Date()
       };
       
+      // Add to registered users list
+      const newRegisteredUser = {
+        email,
+        password,
+        userData: newUser
+      };
+      
+      const updatedUsers = [...registeredUsers, newRegisteredUser];
+      setRegisteredUsers(updatedUsers);
+      
+      // Save to localStorage
+      localStorage.setItem('flickmv_registered_users', JSON.stringify(updatedUsers));
       localStorage.setItem('authToken', 'mock_token_123');
+      localStorage.setItem('flickmv_current_user', JSON.stringify(newUser));
+      
       setUser(newUser);
       setNotifications(mockNotifications);
       
@@ -170,6 +218,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Clear local storage
       localStorage.removeItem('authToken');
+      localStorage.removeItem('flickmv_current_user');
       
       // Clear state
       setUser(null);
