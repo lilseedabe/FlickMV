@@ -49,11 +49,26 @@ import {
   AlertCircle,
   Save,
   FolderOpen,
-  GripVertical
+  GripVertical,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 
 // Types
 import type { Project, TimelineClip, MediaFile } from '../types';
+
+// Preview size options
+const PREVIEW_SIZES = {
+  small: { width: 180, height: 320, label: 'S' },
+  medium: { width: 240, height: 427, label: 'M' },
+  large: { width: 300, height: 533, label: 'L' },
+  xlarge: { width: 360, height: 640, label: 'XL' }
+};
+
+type PreviewSizeKey = keyof typeof PREVIEW_SIZES;
 
 // Minimal project template
 const createEmptyProject = (): Project => ({
@@ -101,6 +116,10 @@ const Editor: React.FC = () => {
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
   
+  // Preview size state
+  const [previewSize, setPreviewSize] = useState<PreviewSizeKey>('medium');
+  const [showPreviewControls, setShowPreviewControls] = useState(false);
+  
   // Mock user data
   const [user] = useState({
     id: 'user1',
@@ -127,7 +146,7 @@ const Editor: React.FC = () => {
     },
     {
       title: "プレビュー画面",
-      description: "中央のプレビュー画面で作品の仕上がりを確認できます",
+      description: "中央のプレビュー画面で作品の仕上がりを確認できます。右上のボタンでプレビューサイズを調整できます。",
       target: "preview-area"
     },
     {
@@ -143,6 +162,7 @@ const Editor: React.FC = () => {
   ];
 
   const currentTutorialStep = (tutorialSteps[tutorialStep] ?? tutorialSteps[0])!;
+  const currentPreviewSize = PREVIEW_SIZES[previewSize];
 
   // Panel resizing logic
   const handleMouseDown = useCallback((side: 'left' | 'right') => (e: React.MouseEvent) => {
@@ -536,10 +556,58 @@ const Editor: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="h-64 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative"
+            className="flex-1 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative p-4"
             id="preview-area"
           >
-            <div className="relative w-48 h-56 bg-black rounded-lg overflow-hidden border border-gray-700">
+            {/* Preview Size Controls */}
+            <div className="absolute top-4 right-4 z-10">
+              <div className="flex items-center space-x-2">
+                {/* Preview Size Info */}
+                <div className="bg-dark-700/90 backdrop-blur-sm border border-dark-600 rounded-lg px-3 py-2 text-sm">
+                  <div className="flex items-center space-x-2 text-cyan-400">
+                    <Monitor className="w-4 h-4" />
+                    <span>{currentPreviewSize.width}×{currentPreviewSize.height}</span>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {project.settings.frameRate}fps
+                  </div>
+                </div>
+                
+                {/* Size Toggle Buttons */}
+                <div className="flex items-center bg-dark-700/90 backdrop-blur-sm border border-dark-600 rounded-lg p-1">
+                  {Object.entries(PREVIEW_SIZES).map(([key, size]) => (
+                    <button
+                      key={key}
+                      onClick={() => setPreviewSize(key as PreviewSizeKey)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                        previewSize === key
+                          ? 'bg-cyan-500 text-white'
+                          : 'text-gray-400 hover:text-white hover:bg-dark-600'
+                      }`}
+                    >
+                      {size.label}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Quality Selector */}
+                <select className="bg-dark-700/90 backdrop-blur-sm border border-dark-600 rounded-lg px-2 py-2 text-sm text-cyan-400">
+                  <option>Medium Quality</option>
+                  <option>High Quality</option>
+                  <option>Low Quality</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Preview Container */}
+            <div 
+              className="relative bg-black rounded-lg overflow-hidden border border-gray-700 shadow-2xl"
+              style={{ 
+                width: currentPreviewSize.width, 
+                height: currentPreviewSize.height,
+                transition: 'all 0.3s ease'
+              }}
+            >
               <Preview 
                 project={project}
                 playheadPosition={playheadPosition}
@@ -557,6 +625,7 @@ const Editor: React.FC = () => {
                   <div className="text-center text-gray-400">
                     <Video className="w-8 h-8 mx-auto mb-2" />
                     <p className="text-sm">プレビューなし</p>
+                    <p className="text-xs text-gray-500 mt-1">メディアを追加してください</p>
                   </div>
                 </div>
               )}
@@ -584,7 +653,7 @@ const Editor: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex-1 bg-dark-900"
+            className="h-64 bg-dark-900"
             id="timeline"
           >
             <Timeline
@@ -664,12 +733,12 @@ const Editor: React.FC = () => {
             <span>解像度: {project.settings.resolution}</span>
             <span>FPS: {project.settings.frameRate}</span>
             <span>長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}</span>
+            <span>プレビュー: {currentPreviewSize.width}×{currentPreviewSize.height}</span>
           </div>
           <div className="flex items-center space-x-6">
             <span>クリップ: {project.timeline.clips.length}</span>
             <span className="capitalize">プラン: {user.plan}</span>
-            <span>左パネル: {leftPanelWidth}px</span>
-            <span>右パネル: {rightPanelWidth}px</span>
+
             <span className="flex items-center space-x-1">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
               <span>準備完了</span>
