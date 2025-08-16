@@ -58,46 +58,60 @@ import {
 } from 'lucide-react';
 
 // Types
-import type { Project, TimelineClip, MediaFile } from '../types';
+import type { Project, TimelineClip, MediaFile, Resolution } from '../types';
 
-// Preview size options
+// Video resolution options (actual output size)
+const VIDEO_RESOLUTIONS: Record<Resolution, { width: number; height: number; label: string; icon: any }> = {
+  '9:16': { width: 1080, height: 1920, label: 'モバイル (9:16)', icon: Smartphone },
+  '16:9': { width: 1920, height: 1080, label: 'デスクトップ (16:9)', icon: Monitor },
+  '1:1': { width: 1080, height: 1080, label: 'スクエア (1:1)', icon: Square },
+  '4:3': { width: 1440, height: 1080, label: 'クラシック (4:3)', icon: Tablet },
+  '720p': { width: 1280, height: 720, label: 'HD (720p)', icon: Monitor },
+  '1080p': { width: 1920, height: 1080, label: 'Full HD (1080p)', icon: Monitor },
+  '4K': { width: 3840, height: 2160, label: '4K Ultra HD', icon: Monitor },
+  'custom': { width: 1920, height: 1080, label: 'カスタム', icon: Settings }
+};
+
+// Preview display sizes (for UI only)
 const PREVIEW_SIZES = {
-  small: { width: 180, height: 320, label: 'S' },
-  medium: { width: 240, height: 427, label: 'M' },
-  large: { width: 300, height: 533, label: 'L' },
-  xlarge: { width: 360, height: 640, label: 'XL' }
+  small: { scale: 0.15, label: 'S' },
+  medium: { scale: 0.2, label: 'M' },
+  large: { scale: 0.25, label: 'L' }
 };
 
 type PreviewSizeKey = keyof typeof PREVIEW_SIZES;
 
-// Minimal project template
-const createEmptyProject = (): Project => ({
-  id: '1',
-  name: 'New Project',
-  description: '',
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  settings: {
-    resolution: '9:16',
-    frameRate: 30,
-    duration: 60,
-    outputFormat: {
-      container: 'mp4',
-      videoCodec: 'h264',
-      audioBitrate: 128,
-      videoBitrate: 5000,
-      quality: 'high'
-    }
-  },
-  timeline: {
-    clips: [],
-    audioTracks: [],
-    duration: 60,
-    zoom: 1,
-    playheadPosition: 0
-  },
-  mediaLibrary: []
-});
+// Empty project template
+const createEmptyProject = (): Project => {
+  const now = new Date();
+  return {
+    id: `project_${Date.now()}`,
+    name: 'Untitled Project',
+    description: '',
+    createdAt: now,
+    updatedAt: now,
+    settings: {
+      resolution: '9:16',
+      frameRate: 30,
+      duration: 60,
+      outputFormat: {
+        container: 'mp4',
+        videoCodec: 'h264',
+        audioBitrate: 128,
+        videoBitrate: 5000,
+        quality: 'high'
+      }
+    },
+    timeline: {
+      clips: [],
+      audioTracks: [],
+      duration: 60,
+      zoom: 1,
+      playheadPosition: 0
+    },
+    mediaLibrary: []
+  };
+};
 
 const Editor: React.FC = () => {
   const { projectId } = useParams();
@@ -119,6 +133,9 @@ const Editor: React.FC = () => {
   // Preview size state
   const [previewSize, setPreviewSize] = useState<PreviewSizeKey>('medium');
   const [showPreviewControls, setShowPreviewControls] = useState(false);
+  
+  // Video resolution state
+  const [videoResolution, setVideoResolution] = useState<Resolution>(project.settings.resolution);
   
   // Mock user data
   const [user] = useState({
@@ -163,6 +180,11 @@ const Editor: React.FC = () => {
 
   const currentTutorialStep = (tutorialSteps[tutorialStep] ?? tutorialSteps[0])!;
   const currentPreviewSize = PREVIEW_SIZES[previewSize];
+  const currentVideoResolution = VIDEO_RESOLUTIONS[videoResolution];
+  
+  // Calculate preview dimensions based on video resolution and scale
+  const previewWidth = Math.round(currentVideoResolution.width * currentPreviewSize.scale);
+  const previewHeight = Math.round(currentVideoResolution.height * currentPreviewSize.scale);
 
   // Panel resizing logic
   const handleMouseDown = useCallback((side: 'left' | 'right') => (e: React.MouseEvent) => {
@@ -229,6 +251,17 @@ const Editor: React.FC = () => {
       return;
     }
     setShowExportModal(true);
+  };
+  
+  const handleResolutionChange = (newResolution: Resolution) => {
+    setVideoResolution(newResolution);
+    setProject(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        resolution: newResolution
+      }
+    }));
   };
 
   const nextTutorialStep = () => {
@@ -551,29 +584,62 @@ const Editor: React.FC = () => {
         </motion.div>
 
         {/* Center Area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Video Resolution Controls */}
+          <div className="bg-dark-800 border-b border-dark-700 px-4 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <span className="text-sm font-medium text-gray-300">出力解像度:</span>
+                <div className="flex items-center space-x-1">
+                  {(['9:16', '16:9', '1:1', '4:3'] as Resolution[]).map((key) => {
+                    const resolution = VIDEO_RESOLUTIONS[key];
+                    const Icon = resolution.icon;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => handleResolutionChange(key)}
+                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                          videoResolution === key
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="hidden sm:inline">{resolution.label}</span>
+                        <span className="text-xs">{resolution.width}×{resolution.height}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="text-xs text-gray-400">
+                現在: {currentVideoResolution.width}×{currentVideoResolution.height}
+              </div>
+            </div>
+          </div>
+          
           {/* Preview Area */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex-1 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative p-4"
+            className="flex-1 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative overflow-auto"
             id="preview-area"
           >
             {/* Preview Size Controls */}
             <div className="absolute top-4 right-4 z-10">
               <div className="flex items-center space-x-2">
-                {/* Preview Size Info */}
+                {/* Preview Scale Info */}
                 <div className="bg-dark-700/90 backdrop-blur-sm border border-dark-600 rounded-lg px-3 py-2 text-sm">
                   <div className="flex items-center space-x-2 text-cyan-400">
-                    <Monitor className="w-4 h-4" />
-                    <span>{currentPreviewSize.width}×{currentPreviewSize.height}</span>
+                    <Eye className="w-4 h-4" />
+                    <span>{Math.round(currentPreviewSize.scale * 100)}%</span>
                   </div>
                   <div className="text-xs text-gray-400 mt-1">
-                    {project.settings.frameRate}fps
+                    {previewWidth}×{previewHeight}
                   </div>
                 </div>
                 
-                {/* Size Toggle Buttons */}
+                {/* Scale Toggle Buttons */}
                 <div className="flex items-center bg-dark-700/90 backdrop-blur-sm border border-dark-600 rounded-lg p-1">
                   {Object.entries(PREVIEW_SIZES).map(([key, size]) => (
                     <button
@@ -589,23 +655,18 @@ const Editor: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                
-                {/* Quality Selector */}
-                <select className="bg-dark-700/90 backdrop-blur-sm border border-dark-600 rounded-lg px-2 py-2 text-sm text-cyan-400">
-                  <option>Medium Quality</option>
-                  <option>High Quality</option>
-                  <option>Low Quality</option>
-                </select>
               </div>
             </div>
 
             {/* Preview Container */}
             <div 
-              className="relative bg-black rounded-lg overflow-hidden border border-gray-700 shadow-2xl"
+              className="relative bg-black rounded-lg overflow-hidden border border-gray-700 shadow-2xl m-4"
               style={{ 
-                width: currentPreviewSize.width, 
-                height: currentPreviewSize.height,
-                transition: 'all 0.3s ease'
+                width: previewWidth, 
+                height: previewHeight,
+                transition: 'all 0.3s ease',
+                maxWidth: '90%',
+                maxHeight: '90%'
               }}
             >
               <Preview 
@@ -730,10 +791,10 @@ const Editor: React.FC = () => {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-6">
-            <span>解像度: {project.settings.resolution}</span>
+            <span>解像度: {currentVideoResolution.width}×{currentVideoResolution.height}</span>
             <span>FPS: {project.settings.frameRate}</span>
             <span>長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}</span>
-            <span>プレビュー: {currentPreviewSize.width}×{currentPreviewSize.height}</span>
+            <span>プレビュー: {Math.round(currentPreviewSize.scale * 100)}% ({previewWidth}×{previewHeight})</span>
           </div>
           <div className="flex items-center space-x-6">
             <span>クリップ: {project.timeline.clips.length}</span>

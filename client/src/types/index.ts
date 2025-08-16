@@ -130,7 +130,7 @@ export interface OutputFormat {
   quality: 'low' | 'medium' | 'high' | 'ultra';
 }
 
-export type Resolution = '720p' | '1080p' | '4K' | '9:16' | '16:9' | '1:1' | 'custom';
+export type Resolution = '720p' | '1080p' | '4K' | '9:16' | '16:9' | '1:1' | '4:3' | 'custom';
 
 export interface ProjectSettings {
   resolution: Resolution;
@@ -728,6 +728,7 @@ export const RESOLUTION_PRESETS = {
   '9:16': { width: 1080, height: 1920 },
   '16:9': { width: 1920, height: 1080 },
   '1:1': { width: 1080, height: 1080 },
+  '4:3': { width: 1440, height: 1080 },
   'custom': { width: 1920, height: 1080 }
 } as const;
 
