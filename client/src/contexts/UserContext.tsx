@@ -122,6 +122,48 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const register = async (name: string, email: string, password: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // For demo purposes, create a new user with provided data
+      const newUser: User = {
+        ...mockUser,
+        id: `user_${Date.now()}`,
+        name,
+        email,
+        createdAt: new Date(),
+        lastLoginAt: new Date()
+      };
+      
+      localStorage.setItem('authToken', 'mock_token_123');
+      setUser(newUser);
+      setNotifications(mockNotifications);
+      
+      // Add welcome notification
+      const welcomeNotification: Notification = {
+        id: `notif_welcome_${Date.now()}`,
+        type: 'success',
+        title: 'アカウント作成完了',
+        message: `${name}さん、FlickMVへようこそ！`,
+        unread: true,
+        createdAt: new Date()
+      };
+      
+      setNotifications(prev => [welcomeNotification, ...prev]);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       setLoading(true);
@@ -277,6 +319,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     error,
     
     login,
+    register,
     logout,
     updateUser,
     upgradePlan,

@@ -356,6 +356,7 @@ export interface UserContextType {
   
   // Actions
   login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   upgradePlan: (plan: string) => Promise<void>;

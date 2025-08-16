@@ -21,11 +21,14 @@ import { useUser } from '../contexts/UserContext';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { user, login, loading, error } = useUser();
+  const { user, login, register, loading, error } = useUser();
   
+  const [isLoginMode, setIsLoginMode] = useState(true);
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,10 +58,23 @@ const Login: React.FC = () => {
     setFormError(null);
 
     try {
-      await login(formData.email, formData.password);
+      if (isLoginMode) {
+        await login(formData.email, formData.password);
+      } else {
+        // Validation for registration
+        if (formData.password !== formData.confirmPassword) {
+          throw new Error('パスワードが一致しません');
+        }
+        if (formData.password.length < 6) {
+          throw new Error('パスワードは6文字以上で入力してください');
+        }
+        await register(formData.name, formData.email, formData.password);
+      }
       // Navigation will happen automatically via useEffect when user is set
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'ログインに失敗しました');
+      const errorMessage = err instanceof Error ? err.message : 
+        (isLoginMode ? 'ログインに失敗しました' : 'アカウント作成に失敗しました');
+      setFormError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -66,8 +82,10 @@ const Login: React.FC = () => {
 
   const handleDemoLogin = async () => {
     setFormData({
+      name: '',
       email: 'demo@flickmv.com',
-      password: 'demo123'
+      password: 'demo123',
+      confirmPassword: ''
     });
     
     setIsSubmitting(true);
@@ -184,8 +202,15 @@ const Login: React.FC = () => {
             className="bg-dark-800/50 backdrop-blur-sm rounded-2xl p-8 border border-dark-700/50"
           >
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">ログイン</h2>
-              <p className="text-gray-400">アカウントにサインインしてください</p>
+              <h2 className="text-2xl font-bold text-white mb-2">
+                {isLoginMode ? 'ログイン' : '新規登録'}
+              </h2>
+              <p className="text-gray-400">
+                {isLoginMode 
+                  ? 'アカウントにサインインしてください' 
+                  : '新しいアカウントを作成しましょう'
+                }
+              </p>
             </div>
 
             {/* Error Message */}
@@ -204,6 +229,27 @@ const Login: React.FC = () => {
             </AnimatePresence>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Name Field - Only for registration */}
+              {!isLoginMode && (
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+                    お名前
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all"
+                      placeholder="山田太郎"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Email Field */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
@@ -259,6 +305,30 @@ const Login: React.FC = () => {
                 </div>
               </div>
 
+              {/* Confirm Password Field - Only for registration */}
+              {!isLoginMode && (
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                    パスワード確認
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleInputChange}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Remember Me & Forgot Password */}
               <div className="flex items-center justify-between">
                 <label className="flex items-center">
@@ -283,7 +353,7 @@ const Login: React.FC = () => {
                   <Loader className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    <span>ログイン</span>
+                    <span>{isLoginMode ? 'ログイン' : 'アカウント作成'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -311,12 +381,39 @@ const Login: React.FC = () => {
               </button>
             </div>
 
-            {/* Sign Up Link */}
+            {/* Mode Switch Link */}
             <p className="mt-8 text-center text-sm text-gray-400">
-              アカウントをお持ちでない場合{' '}
-              <a href="#" className="text-purple-400 hover:text-purple-300 font-medium">
-                新規登録
-              </a>
+              {isLoginMode ? (
+                <>
+                  アカウントをお持ちでない場合{' '}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIsLoginMode(false);
+                      setFormError(null);
+                      setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+                    }}
+                    className="text-purple-400 hover:text-purple-300 font-medium underline"
+                  >
+                    新規登録
+                  </button>
+                </>
+              ) : (
+                <>
+                  既にアカウントをお持ちですか？{' '}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIsLoginMode(true);
+                      setFormError(null);
+                      setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+                    }}
+                    className="text-purple-400 hover:text-purple-300 font-medium underline"
+                  >
+                    ログイン
+                  </button>
+                </>
+              )}
             </p>
           </motion.div>
 
