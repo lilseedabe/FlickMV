@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'react-router-dom';
 
@@ -8,6 +8,9 @@ import Timeline from '../components/timeline/Timeline';
 import Preview from '../components/preview/Preview';
 import PropertiesPanel from '../components/editor/PropertiesPanel';
 import PlaybackControls from '../components/editor/PlaybackControls';
+
+// Context
+import { useUser } from '../contexts/UserContext';
 
 import {
   Play,
@@ -43,23 +46,26 @@ import {
   Lock,
   Star,
   Info,
-  AlertCircle
+  AlertCircle,
+  Save,
+  FolderOpen,
+  GripVertical
 } from 'lucide-react';
 
 // Types
 import type { Project, TimelineClip, MediaFile } from '../types';
 
-// Mock data - in real app this would come from API
-const mockProject: Project = {
+// Minimal project template
+const createEmptyProject = (): Project => ({
   id: '1',
-  name: 'Summer Vibes MV',
-  description: 'A vibrant music video with summer themes',
-  createdAt: new Date('2024-01-15'),
-  updatedAt: new Date('2024-01-20'),
+  name: 'New Project',
+  description: '',
+  createdAt: new Date(),
+  updatedAt: new Date(),
   settings: {
     resolution: '9:16',
     frameRate: 30,
-    duration: 45,
+    duration: 60,
     outputFormat: {
       container: 'mp4',
       videoCodec: 'h264',
@@ -69,104 +75,31 @@ const mockProject: Project = {
     }
   },
   timeline: {
-    clips: [
-      {
-        id: 'clip1',
-        mediaId: 'media1',
-        startTime: 0,
-        duration: 5,
-        trimStart: 0,
-        trimEnd: 5,
-        layer: 0,
-        effects: [
-          {
-            id: 'effect1',
-            type: 'pan_zoom',
-            parameters: { zoom: 1.2, panX: 0.1, panY: 0.1 },
-            enabled: true
-          }
-        ]
-      },
-      {
-        id: 'clip2',
-        mediaId: 'media2',
-        startTime: 5,
-        duration: 4,
-        trimStart: 0,
-        trimEnd: 4,
-        layer: 0,
-        transitions: {
-          in: { type: 'crossfade', duration: 0.5 }
-        }
-      }
-    ],
-    audioTracks: [
-      {
-        id: 'audio1',
-        mediaId: 'audio1',
-        startTime: 0,
-        duration: 45,
-        volume: 0.8,
-        bpm: 120,
-        beats: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
-      }
-    ],
-    duration: 45,
+    clips: [],
+    audioTracks: [],
+    duration: 60,
     zoom: 1,
     playheadPosition: 0
   },
-  mediaLibrary: [
-    {
-      id: 'media1',
-      name: 'sunset-beach.jpg',
-      type: 'image',
-      url: 'https://via.placeholder.com/1080x1920/ff6b6b/ffffff?text=Sunset+Beach',
-      thumbnail: 'https://via.placeholder.com/150x200/ff6b6b/ffffff?text=Sunset',
-      size: 2048000,
-      width: 1080,
-      height: 1920,
-      format: 'jpg',
-      uploadedAt: new Date('2024-01-15')
-    },
-    {
-      id: 'media2',
-      name: 'palm-trees.jpg',
-      type: 'image',
-      url: 'https://via.placeholder.com/1080x1920/4ecdc4/ffffff?text=Palm+Trees',
-      thumbnail: 'https://via.placeholder.com/150x200/4ecdc4/ffffff?text=Palm',
-      size: 1856000,
-      width: 1080,
-      height: 1920,
-      format: 'jpg',
-      uploadedAt: new Date('2024-01-16')
-    },
-    {
-      id: 'audio1',
-      name: 'summer-beat.mp3',
-      type: 'audio',
-      url: '/assets/audio/summer-beat.mp3',
-      duration: 45,
-      size: 4200000,
-      format: 'mp3',
-      uploadedAt: new Date('2024-01-17'),
-      metadata: {
-        bitrate: 320,
-        channels: 2
-      }
-    }
-  ]
-};
+  mediaLibrary: []
+});
 
 const Editor: React.FC = () => {
   const { projectId } = useParams();
-  const [project, setProject] = useState<Project>(mockProject);
+  const [project, setProject] = useState<Project>(createEmptyProject());
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadPosition, setPlayheadPosition] = useState(0);
   const [selectedClip, setSelectedClip] = useState<TimelineClip | null>(null);
   const [zoom, setZoom] = useState(1);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-  const [activePanel, setActivePanel] = useState<'media' | 'effects' | 'export'>('media');
+  const [activePanel, setActivePanel] = useState<'media' | 'effects'>('media');
+  const [showExportModal, setShowExportModal] = useState(false);
+  
+  // Panel resizing state
+  const [leftPanelWidth, setLeftPanelWidth] = useState(320);
+  const [rightPanelWidth, setRightPanelWidth] = useState(320);
+  const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
   
   // Mock user data
   const [user] = useState({
@@ -181,20 +114,20 @@ const Editor: React.FC = () => {
     }
   });
 
-
   // Refs for panel resizing
   const leftPanelRef = useRef<HTMLDivElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const tutorialSteps = [
     {
       title: "メディアライブラリ",
-      description: "左側のパネルから画像、動画、音声ファイルをアップロードまたは選択できます",
+      description: "左側のパネルから画像、動画、音声ファイルをアップロードまたは選択できます。パネルの境界をドラッグしてサイズを調整できます。",
       target: "media-library"
     },
     {
       title: "プレビュー画面",
-      description: "中央のプレビュー画面で作品の仕上がりを確認できます。透かしもここで確認できます",
+      description: "中央のプレビュー画面で作品の仕上がりを確認できます",
       target: "preview-area"
     },
     {
@@ -204,16 +137,58 @@ const Editor: React.FC = () => {
     },
     {
       title: "プロパティパネル",
-      description: "右側のパネルでエフェクトや透かし設定を調整できます",
+      description: "右側のパネルでエフェクトや設定を調整できます。パネル幅も自由に調整可能です。",
       target: "effects-panel"
     },
   ];
+
   const currentTutorialStep = (tutorialSteps[tutorialStep] ?? tutorialSteps[0])!;
-  const currentTutorialTitle = currentTutorialStep.title;
-  const currentTutorialDescription = currentTutorialStep.description;
+
+  // Panel resizing logic
+  const handleMouseDown = useCallback((side: 'left' | 'right') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(side);
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing || !containerRef.current) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const minWidth = 200;
+    const maxWidth = containerRect.width * 0.4; // Max 40% of container width
+
+    if (isResizing === 'left') {
+      const newWidth = Math.min(Math.max(e.clientX - containerRect.left, minWidth), maxWidth);
+      setLeftPanelWidth(newWidth);
+    } else if (isResizing === 'right') {
+      const newWidth = Math.min(Math.max(containerRect.right - e.clientX, minWidth), maxWidth);
+      setRightPanelWidth(newWidth);
+    }
+  }, [isResizing]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(null);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   const handleMediaUpload = (files: FileList) => {
     console.log('Uploading files:', files);
+    // TODO: Implement actual file upload
   };
 
   const handleClipSelect = (clip: TimelineClip) => {
@@ -228,6 +203,13 @@ const Editor: React.FC = () => {
     setPlayheadPosition(time);
   };
 
+  const handleExport = () => {
+    if (user.exportStats.remaining <= 0) {
+      alert('エクスポート制限に達しました。プランをアップグレードしてください。');
+      return;
+    }
+    setShowExportModal(true);
+  };
 
   const nextTutorialStep = () => {
     if (tutorialStep < tutorialSteps.length - 1) {
@@ -276,7 +258,7 @@ const Editor: React.FC = () => {
                   {currentTutorialStep.title}
                 </h3>
                 <p className="text-gray-300 mb-6">
-                  {currentTutorialDescription}
+                  {currentTutorialStep.description}
                 </p>
                 <div className="flex items-center justify-center space-x-2 mb-6">
                   {tutorialSteps.map((_, index) => (
@@ -309,70 +291,176 @@ const Editor: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Export Modal */}
+      <AnimatePresence>
+        {showExportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-dark-800 rounded-2xl p-6 max-w-md w-full m-4 border border-green-500/30"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Download className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">エクスポート設定</h3>
+                
+                <div className="space-y-4 text-left mb-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">解像度</label>
+                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
+                      <option>1080p (推奨)</option>
+                      <option>720p</option>
+                      {user.plan === 'pro' || user.plan === 'premium' ? (
+                        <option>4K</option>
+                      ) : (
+                        <option disabled>4K (プロプラン以上)</option>
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">品質</label>
+                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
+                      <option>高品質</option>
+                      <option>標準</option>
+                      <option>圧縮</option>
+                    </select>
+                  </div>
+                  
+                  {!user.canRemoveWatermark && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <Lock className="w-4 h-4 text-yellow-400 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="text-yellow-400 font-medium">透かし付きでエクスポート</p>
+                          <p className="text-gray-300">透かしを削除するにはプランをアップグレードしてください</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <div className="text-sm text-center">
+                      <p className="text-blue-400">残りエクスポート: {user.exportStats.remaining}/{user.exportStats.limit}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowExportModal(false)}
+                    className="flex-1 bg-dark-700 text-gray-300 py-2 px-4 rounded-lg font-medium hover:bg-dark-600 transition-all"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={() => {
+                      // TODO: Implement actual export
+                      console.log('Starting export...');
+                      setShowExportModal(false);
+                    }}
+                    className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-600 transition-all"
+                  >
+                    エクスポート開始
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-dark-800 border-b border-dark-700 px-6 py-3 flex items-center justify-between"
+        className="bg-dark-800 border-b border-dark-700 px-4 sm:px-6 py-3"
       >
-        <div className="flex items-center space-x-4">
-          <h1 className="text-lg font-semibold">{project.name}</h1>
-          <div className="flex items-center space-x-2 text-sm text-gray-400">
-            <span>●</span>
-            <span>自動保存</span>
-          </div>
-          {!user.canRemoveWatermark && (
-            <div className="flex items-center space-x-2 bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-sm">
-              <Lock className="w-3 h-3" />
-              <span>FlickMV透かし付き</span>
+        <div className="flex items-center justify-between">
+          {/* Left side */}
+          <div className="flex items-center space-x-3 min-w-0 flex-1">
+            <FolderOpen className="w-5 h-5 text-purple-400 flex-shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">{project.name}</h1>
+              <div className="flex items-center space-x-2 text-xs text-gray-400">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span>自動保存済み</span>
+              </div>
             </div>
-          )}
-        </div>
-        <div className="flex items-center space-x-3">
-          <div className="text-sm text-gray-400">
-            エクスポート残り: {user.exportStats.remaining}/{user.exportStats.limit}
           </div>
-          <button
-            onClick={() => setShowTutorial(true)}
-            className="flex items-center space-x-2 bg-dark-700 hover:bg-dark-600 px-3 py-1.5 rounded-lg text-sm transition-all"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>ヘルプ</span>
-          </button>
-          <button className="bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
-            <Download className="w-4 h-4" />
-            <span>エクスポート</span>
-          </button>
+
+          {/* Center - Plan info */}
+          <div className="hidden md:flex items-center space-x-4">
+            {!user.canRemoveWatermark && (
+              <div className="flex items-center space-x-2 bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded-lg text-sm">
+                <Lock className="w-3 h-3" />
+                <span className="hidden sm:inline">透かし付き</span>
+              </div>
+            )}
+            
+            <div className="text-sm text-gray-400">
+              <span className="hidden sm:inline">エクスポート残り: </span>
+              <span className="font-medium text-blue-400">{user.exportStats.remaining}/{user.exportStats.limit}</span>
+            </div>
+          </div>
+
+          {/* Right side */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowTutorial(true)}
+              className="hidden sm:flex items-center space-x-2 bg-dark-700 hover:bg-dark-600 px-3 py-1.5 rounded-lg text-sm transition-all"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>ヘルプ</span>
+            </button>
+            
+            <button
+              onClick={handleExport}
+              disabled={user.exportStats.remaining <= 0}
+              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center space-x-2"
+            >
+              <Download className="w-4 h-4" />
+              <span>エクスポート</span>
+            </button>
+          </div>
         </div>
       </motion.div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden" ref={containerRef}>
         {/* Left Panel */}
         <motion.div
           initial={{ x: -300 }}
           animate={{ x: 0 }}
-          className="w-80 bg-dark-800 border-r border-dark-700 flex flex-col"
+          className="bg-dark-800 border-r border-dark-700 flex flex-col relative"
+          style={{ width: leftPanelWidth }}
           id="media-library"
           ref={leftPanelRef}
         >
           <div className="p-4 border-b border-dark-700">
-            <div className="flex space-x-1 mb-4">
+            <div className="flex space-x-1">
               {[
                 { id: 'media', label: 'メディア', icon: Image },
-                { id: 'effects', label: 'エフェクト', icon: Sparkles },
-                { id: 'export', label: 'エクスポート', icon: Download }
+                { id: 'effects', label: 'エフェクト', icon: Sparkles }
               ].map(tab => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
-                    id={tab.id === 'watermark' ? 'watermark-tab' : undefined}
                     onClick={() => setActivePanel(tab.id as any)}
-                    className={`flex items-center space-x-1 px-2 py-2 rounded-lg text-xs transition-all ${
-                      activePanel === tab.id ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-white hover:bg-dark-700'
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      activePanel === tab.id 
+                        ? 'bg-purple-500 text-white' 
+                        : 'text-gray-400 hover:text-white hover:bg-dark-700'
                     }`}
                   >
-                    <Icon className="w-3 h-3" />
+                    <Icon className="w-4 h-4" />
                     <span>{tab.label}</span>
                   </button>
                 );
@@ -392,81 +480,58 @@ const Editor: React.FC = () => {
                   mediaFiles={project.mediaLibrary}
                   onUpload={handleMediaUpload}
                 />
+                
+                {project.mediaLibrary.length === 0 && (
+                  <div className="text-center py-8">
+                    <Image className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">メディアファイルがありません</p>
+                    <p className="text-gray-500 text-xs mt-1">ファイルをアップロードして始めましょう</p>
+                  </div>
+                )}
               </div>
             )}
 
             {activePanel === 'effects' && (
               <div className="p-4">
                 <h3 className="text-lg font-semibold mb-4">エフェクト</h3>
-                <div className="space-y-3">
-                  {['フェードイン', 'フェードアウト', 'ズーム', '回転', 'ぼかし'].map(effect => (
-                    <button
-                      key={effect}
-                      className="w-full bg-dark-700 hover:bg-dark-600 text-left py-3 px-4 rounded-lg transition-all"
-                    >
-                      {effect}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-
-            {activePanel === 'export' && (
-              <div className="p-4">
-                <h3 className="text-lg font-semibold mb-4">エクスポート設定</h3>
-                
-                {/* Export Limit Warning */}
-                {user.exportStats.remaining <= 1 && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
-                    <div className="flex items-start space-x-2">
-                      <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="text-yellow-400 font-medium">エクスポート制限間近</p>
-                        <p className="text-gray-300">残り {user.exportStats.remaining} 回です</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">解像度</label>
-                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
-                      <option>1080p (推奨)</option>
-                      <option>720p</option>
-                      {user.plan === 'pro' || user.plan === 'premium' ? (
-                        <option>4K</option>
-                      ) : (
-                        <option disabled>4K (プロプラン以上)</option>
-                      )}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">フォーマット</label>
-                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
-                      <option>MP4</option>
-                      <option>MOV</option>
-                      <option>AVI</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">品質</label>
-                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
-                      <option>高品質</option>
-                      <option>標準</option>
-                      <option>圧縮</option>
-                    </select>
-                  </div>
-
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { name: 'フェードイン', icon: Eye },
+                    { name: 'フェードアウト', icon: EyeOff },
+                    { name: 'ズーム', icon: Move },
+                    { name: '回転', icon: RotateCw },
+                    { name: 'ぼかし', icon: Sparkles },
+                    { name: 'カット', icon: Scissors }
+                  ].map(effect => {
+                    const Icon = effect.icon;
+                    return (
+                      <button
+                        key={effect.name}
+                        className="bg-dark-700 hover:bg-dark-600 p-3 rounded-lg transition-all text-center"
+                      >
+                        <Icon className="w-6 h-6 mx-auto mb-2 text-purple-400" />
+                        <span className="text-xs">{effect.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
+
+          {/* Left Resize Handle */}
+          <div
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-purple-500/50 transition-colors group"
+            onMouseDown={handleMouseDown('left')}
+          >
+            <div className="absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <GripVertical className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
         </motion.div>
 
         {/* Center Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           {/* Preview Area */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -474,13 +539,27 @@ const Editor: React.FC = () => {
             className="h-64 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative"
             id="preview-area"
           >
-            <div className="relative w-48 h-56 bg-black rounded-lg overflow-hidden">
+            <div className="relative w-48 h-56 bg-black rounded-lg overflow-hidden border border-gray-700">
               <Preview 
                 project={project}
                 playheadPosition={playheadPosition}
                 isPlaying={isPlaying}
               />
               
+              {!user.canRemoveWatermark && (
+                <div className="absolute bottom-2 right-2 text-xs text-white/60 bg-black/50 px-2 py-1 rounded">
+                  FlickMV
+                </div>
+              )}
+              
+              {project.mediaLibrary.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center text-gray-400">
+                    <Video className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-sm">プレビューなし</p>
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -524,12 +603,26 @@ const Editor: React.FC = () => {
         <motion.div
           initial={{ x: 300 }}
           animate={{ x: 0 }}
-          className="w-80 bg-dark-800 border-l border-dark-700 flex flex-col"
+          className="bg-dark-800 border-l border-dark-700 flex flex-col relative"
+          style={{ width: rightPanelWidth }}
           id="effects-panel"
           ref={rightPanelRef}
         >
+          {/* Right Resize Handle */}
+          <div
+            className="absolute top-0 left-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-purple-500/50 transition-colors group"
+            onMouseDown={handleMouseDown('right')}
+          >
+            <div className="absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <GripVertical className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
+
           <div className="p-4 border-b border-dark-700">
-            <h2 className="text-lg font-semibold">プロパティ</h2>
+            <h2 className="text-lg font-semibold flex items-center space-x-2">
+              <Settings className="w-5 h-5 text-purple-400" />
+              <span>プロパティ</span>
+            </h2>
           </div>
           <div className="flex-1 overflow-hidden">
             <PropertiesPanel
@@ -548,6 +641,13 @@ const Editor: React.FC = () => {
                 setProject(prev => ({ ...prev, settings }));
               }}
             />
+            
+            {!selectedClip && (
+              <div className="p-4 text-center text-gray-400">
+                <Info className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-sm">クリップを選択してプロパティを編集</p>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>
@@ -557,18 +657,24 @@ const Editor: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
-        className="bg-dark-800 border-t border-dark-700 px-6 py-2 flex items-center justify-between text-sm text-dark-400"
+        className="bg-dark-800 border-t border-dark-700 px-6 py-2 text-sm text-gray-400"
       >
-        <div className="flex items-center space-x-6">
-          <span>解像度: {project.settings.resolution}</span>
-          <span>FPS: {project.settings.frameRate}</span>
-          <span>継続時間: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}</span>
-        </div>
-        <div className="flex items-center space-x-6">
-          <span>クリップ: {project.timeline.clips.length}</span>
-          <span>プラン: {user.plan}</span>
-          <span>透かし: {!user.canRemoveWatermark ? '有効' : '無効'}</span>
-          <span className="text-green-400">● 自動保存済み</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <span>解像度: {project.settings.resolution}</span>
+            <span>FPS: {project.settings.frameRate}</span>
+            <span>長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}</span>
+          </div>
+          <div className="flex items-center space-x-6">
+            <span>クリップ: {project.timeline.clips.length}</span>
+            <span className="capitalize">プラン: {user.plan}</span>
+            <span>左パネル: {leftPanelWidth}px</span>
+            <span>右パネル: {rightPanelWidth}px</span>
+            <span className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+              <span>準備完了</span>
+            </span>
+          </div>
         </div>
       </motion.div>
     </div>
