@@ -11,7 +11,7 @@ const path = require('path');
 dotenv.config();
 
 // Prisma (Supabase Postgres)
-const prisma = require('./prisma/client');
+#const prisma = require('./prisma/client');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -22,7 +22,7 @@ const userRoutes = require('./routes/users');
 const internalRoutes = require('./routes/internal');
 
 // Import middleware
-const authMiddleware = require('./middleware/auth');
+const { authMiddleware } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 
 // Create Express app
