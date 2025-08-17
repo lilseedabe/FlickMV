@@ -1,1 +1,335 @@
-import { useState, useCallback, useRef, useEffect } from 'react';\nimport apiService from '../services/apiService';\nimport type { \n  MediaFileWithAnalysis, \n  AudioAnalysisOptions, \n  AudioAnalysisResult \n} from '../types/audioAnalysis';\n\ninterface UseAudioAnalysisOptions {\n  pollingInterval?: number;\n  maxPollingAttempts?: number;\n  onAnalysisComplete?: (result: AudioAnalysisResult) => void;\n  onAnalysisError?: (error: Error) => void;\n}\n\ninterface UseAudioAnalysisReturn {\n  // State\n  isAnalyzing: boolean;\n  progress: number;\n  error: string | null;\n  result: AudioAnalysisResult | null;\n  \n  // Actions\n  startAnalysis: (mediaId: string, options?: AudioAnalysisOptions) => Promise<void>;\n  regeneratePrompts: (mediaId: string, options?: AudioAnalysisOptions) => Promise<void>;\n  updateScenes: (mediaId: string, scenes: any[]) => Promise<void>;\n  clearError: () => void;\n  reset: () => void;\n  \n  // Utils\n  getAnalysisStatus: (mediaId: string) => Promise<any>;\n}\n\nexport const useAudioAnalysis = (options: UseAudioAnalysisOptions = {}): UseAudioAnalysisReturn => {\n  const {\n    pollingInterval = 2000,\n    maxPollingAttempts = 150, // 5分間のポーリング\n    onAnalysisComplete,\n    onAnalysisError\n  } = options;\n\n  const [isAnalyzing, setIsAnalyzing] = useState(false);\n  const [progress, setProgress] = useState(0);\n  const [error, setError] = useState<string | null>(null);\n  const [result, setResult] = useState<AudioAnalysisResult | null>(null);\n  \n  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);\n  const pollingAttemptsRef = useRef(0);\n\n  // クリーンアップ\n  useEffect(() => {\n    return () => {\n      if (pollingTimeoutRef.current) {\n        clearTimeout(pollingTimeoutRef.current);\n      }\n    };\n  }, []);\n\n  const clearError = useCallback(() => {\n    setError(null);\n  }, []);\n\n  const reset = useCallback(() => {\n    setIsAnalyzing(false);\n    setProgress(0);\n    setError(null);\n    setResult(null);\n    pollingAttemptsRef.current = 0;\n    \n    if (pollingTimeoutRef.current) {\n      clearTimeout(pollingTimeoutRef.current);\n      pollingTimeoutRef.current = null;\n    }\n  }, []);\n\n  const pollAnalysisStatus = useCallback(async (mediaId: string) => {\n    try {\n      const response = await apiService.getAudioAnalysis(mediaId);\n      \n      if (!response.success) {\n        throw new Error(response.message || '解析状況の取得に失敗しました');\n      }\n\n      const { mediaFile, analysisStatus } = response.data;\n      \n      // 進捗更新\n      if (mediaFile.processing?.progress) {\n        setProgress(mediaFile.processing.progress);\n      }\n\n      // 完了チェック\n      if (analysisStatus === 'completed' && mediaFile.analysis) {\n        setResult(mediaFile.analysis);\n        setIsAnalyzing(false);\n        setProgress(100);\n        \n        if (onAnalysisComplete) {\n          onAnalysisComplete(mediaFile.analysis);\n        }\n        return true; // 完了\n      }\n      \n      // 失敗チェック\n      if (analysisStatus === 'failed') {\n        const errorMessage = mediaFile.processing?.error || '解析に失敗しました';\n        setError(errorMessage);\n        setIsAnalyzing(false);\n        \n        if (onAnalysisError) {\n          onAnalysisError(new Error(errorMessage));\n        }\n        return true; // 終了（失敗）\n      }\n\n      // まだ処理中\n      return false;\n    } catch (err: any) {\n      setError(err.message || '解析状況の確認に失敗しました');\n      setIsAnalyzing(false);\n      \n      if (onAnalysisError) {\n        onAnalysisError(err);\n      }\n      return true; // エラーのため終了\n    }\n  }, [onAnalysisComplete, onAnalysisError]);\n\n  const startPolling = useCallback((mediaId: string) => {\n    pollingAttemptsRef.current = 0;\n    \n    const poll = async () => {\n      pollingAttemptsRef.current++;\n      \n      if (pollingAttemptsRef.current > maxPollingAttempts) {\n        setError('解析がタイムアウトしました。時間をおいて再度お試しください。');\n        setIsAnalyzing(false);\n        return;\n      }\n\n      const isComplete = await pollAnalysisStatus(mediaId);\n      \n      if (!isComplete) {\n        pollingTimeoutRef.current = setTimeout(poll, pollingInterval);\n      }\n    };\n\n    poll();\n  }, [pollAnalysisStatus, pollingInterval, maxPollingAttempts]);\n\n  const startAnalysis = useCallback(async (\n    mediaId: string, \n    analysisOptions: AudioAnalysisOptions = {}\n  ) => {\n    try {\n      reset();\n      setIsAnalyzing(true);\n      setProgress(0);\n\n      const response = await apiService.analyzeAudio(mediaId, analysisOptions);\n      \n      if (!response.success) {\n        throw new Error(response.message || '解析の開始に失敗しました');\n      }\n\n      // ポーリング開始\n      startPolling(mediaId);\n    } catch (err: any) {\n      setError(err.message || '解析の開始に失敗しました');\n      setIsAnalyzing(false);\n      \n      if (onAnalysisError) {\n        onAnalysisError(err);\n      }\n    }\n  }, [reset, startPolling, onAnalysisError]);\n\n  const regeneratePrompts = useCallback(async (\n    mediaId: string,\n    analysisOptions: AudioAnalysisOptions = {}\n  ) => {\n    try {\n      setError(null);\n      \n      const response = await apiService.regeneratePrompts(mediaId, analysisOptions);\n      \n      if (!response.success) {\n        throw new Error(response.message || 'プロンプトの再生成に失敗しました');\n      }\n\n      // 結果を更新\n      if (result) {\n        setResult({\n          ...result,\n          mvPrompts: response.data.mvPrompts\n        });\n      }\n    } catch (err: any) {\n      setError(err.message || 'プロンプトの再生成に失敗しました');\n      \n      if (onAnalysisError) {\n        onAnalysisError(err);\n      }\n    }\n  }, [result, onAnalysisError]);\n\n  const updateScenes = useCallback(async (mediaId: string, scenes: any[]) => {\n    try {\n      setError(null);\n      \n      const response = await apiService.updateScenePrompts(mediaId, scenes);\n      \n      if (!response.success) {\n        throw new Error(response.message || 'シーンの更新に失敗しました');\n      }\n\n      // ローカル状態を更新\n      if (result) {\n        setResult({\n          ...result,\n          mvPrompts: {\n            ...result.mvPrompts,\n            scenes: scenes\n          }\n        });\n      }\n    } catch (err: any) {\n      setError(err.message || 'シーンの更新に失敗しました');\n      \n      if (onAnalysisError) {\n        onAnalysisError(err);\n      }\n    }\n  }, [result, onAnalysisError]);\n\n  const getAnalysisStatus = useCallback(async (mediaId: string) => {\n    try {\n      const response = await apiService.getAudioAnalysis(mediaId);\n      return response.data;\n    } catch (err: any) {\n      console.error('Failed to get analysis status:', err);\n      return null;\n    }\n  }, []);\n\n  return {\n    // State\n    isAnalyzing,\n    progress,\n    error,\n    result,\n    \n    // Actions\n    startAnalysis,\n    regeneratePrompts,\n    updateScenes,\n    clearError,\n    reset,\n    \n    // Utils\n    getAnalysisStatus\n  };\n};\n\n// 便利なヘルパーフック：単一の音声ファイル用\nexport const useAudioFileAnalysis = (mediaFile: MediaFileWithAnalysis | null) => {\n  const audioAnalysis = useAudioAnalysis({\n    onAnalysisComplete: (result) => {\n      console.log('Audio analysis completed:', result);\n    },\n    onAnalysisError: (error) => {\n      console.error('Audio analysis error:', error);\n    }\n  });\n\n  // 初期データの設定\n  useEffect(() => {\n    if (mediaFile?.analysis) {\n      audioAnalysis.reset();\n      // setResult を直接呼ぶことはできないので、必要に応じて内部実装を調整\n    }\n  }, [mediaFile, audioAnalysis]);\n\n  const analyzeCurrentFile = useCallback((options?: AudioAnalysisOptions) => {\n    if (!mediaFile) {\n      throw new Error('分析するメディアファイルが選択されていません');\n    }\n    return audioAnalysis.startAnalysis(mediaFile.id, options);\n  }, [mediaFile, audioAnalysis]);\n\n  const regenerateCurrentPrompts = useCallback((options?: AudioAnalysisOptions) => {\n    if (!mediaFile) {\n      throw new Error('プロンプトを再生成するメディアファイルが選択されていません');\n    }\n    return audioAnalysis.regeneratePrompts(mediaFile.id, options);\n  }, [mediaFile, audioAnalysis]);\n\n  const updateCurrentScenes = useCallback((scenes: any[]) => {\n    if (!mediaFile) {\n      throw new Error('シーンを更新するメディアファイルが選択されていません');\n    }\n    return audioAnalysis.updateScenes(mediaFile.id, scenes);\n  }, [mediaFile, audioAnalysis]);\n\n  return {\n    ...audioAnalysis,\n    mediaFile,\n    analyzeCurrentFile,\n    regenerateCurrentPrompts,\n    updateCurrentScenes,\n    hasAnalysis: !!mediaFile?.analysis,\n    isAudioFile: mediaFile?.type === 'audio'\n  };\n};\n\nexport default useAudioAnalysis;\n
+import { useState, useCallback, useRef, useEffect } from 'react';
+import apiService from '../services/apiService';
+import type {
+  MediaFileWithAnalysis,
+  AudioAnalysisOptions,
+  AudioAnalysisResult
+} from '../types/audioAnalysis';
+
+interface UseAudioAnalysisOptions {
+  pollingInterval?: number;
+  maxPollingAttempts?: number;
+  onAnalysisComplete?: (result: AudioAnalysisResult) => void;
+  onAnalysisError?: (error: Error) => void;
+}
+
+interface UseAudioAnalysisReturn {
+  // State
+  isAnalyzing: boolean;
+  progress: number;
+  error: string | null;
+  result: AudioAnalysisResult | null;
+
+  // Actions
+  startAnalysis: (mediaId: string, options?: AudioAnalysisOptions) => Promise<void>;
+  regeneratePrompts: (mediaId: string, options?: AudioAnalysisOptions) => Promise<void>;
+  updateScenes: (mediaId: string, scenes: any[]) => Promise<void>;
+  clearError: () => void;
+  reset: () => void;
+
+  // Utils
+  getAnalysisStatus: (mediaId: string) => Promise<any>;
+}
+
+export const useAudioAnalysis = (options: UseAudioAnalysisOptions = {}): UseAudioAnalysisReturn => {
+  const {
+    pollingInterval = 2000,
+    maxPollingAttempts = 150, // 5分間のポーリング
+    onAnalysisComplete,
+    onAnalysisError
+  } = options;
+
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AudioAnalysisResult | null>(null);
+
+  // window.setTimeout は number を返すため number | null として扱う
+  const pollingTimeoutRef = useRef<number | null>(null);
+  const pollingAttemptsRef = useRef(0);
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (pollingTimeoutRef.current !== null) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const reset = useCallback(() => {
+    setIsAnalyzing(false);
+    setProgress(0);
+    setError(null);
+    setResult(null);
+    pollingAttemptsRef.current = 0;
+
+    if (pollingTimeoutRef.current !== null) {
+      clearTimeout(pollingTimeoutRef.current);
+      pollingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const pollAnalysisStatus = useCallback(
+    async (mediaId: string) => {
+      try {
+        const response = await apiService.getAudioAnalysis(mediaId);
+
+        if (!response.success) {
+          throw new Error(response.message || '解析状況の取得に失敗しました');
+        }
+
+        const { mediaFile, analysisStatus } = response.data;
+
+        // 進捗更新
+        if (mediaFile.processing?.progress != null) {
+          setProgress(mediaFile.processing.progress);
+        }
+
+        // 完了チェック
+        if (analysisStatus === 'completed' && mediaFile.analysis) {
+          setResult(mediaFile.analysis);
+          setIsAnalyzing(false);
+          setProgress(100);
+
+          if (onAnalysisComplete) {
+            onAnalysisComplete(mediaFile.analysis);
+          }
+          return true; // 完了
+        }
+
+        // 失敗チェック
+        if (analysisStatus === 'failed') {
+          const errorMessage = mediaFile.processing?.error || '解析に失敗しました';
+          setError(errorMessage);
+          setIsAnalyzing(false);
+
+          if (onAnalysisError) {
+            onAnalysisError(new Error(errorMessage));
+          }
+          return true; // 終了（失敗）
+        }
+
+        // まだ処理中
+        return false;
+      } catch (err: any) {
+        setError(err?.message || '解析状況の確認に失敗しました');
+        setIsAnalyzing(false);
+
+        if (onAnalysisError) {
+          onAnalysisError(err);
+        }
+        return true; // エラーのため終了
+      }
+    },
+    [onAnalysisComplete, onAnalysisError]
+  );
+
+  const startPolling = useCallback(
+    (mediaId: string) => {
+      pollingAttemptsRef.current = 0;
+
+      const poll = async () => {
+        pollingAttemptsRef.current++;
+
+        if (pollingAttemptsRef.current > maxPollingAttempts) {
+          setError('解析がタイムアウトしました。時間をおいて再度お試しください。');
+          setIsAnalyzing(false);
+          return;
+        }
+
+        const isComplete = await pollAnalysisStatus(mediaId);
+
+        if (!isComplete) {
+          pollingTimeoutRef.current = window.setTimeout(poll, pollingInterval);
+        }
+      };
+
+      poll();
+    },
+    [pollAnalysisStatus, pollingInterval, maxPollingAttempts]
+  );
+
+  const startAnalysis = useCallback(
+    async (mediaId: string, analysisOptions: AudioAnalysisOptions = {}) => {
+      try {
+        reset();
+        setIsAnalyzing(true);
+        setProgress(0);
+
+        const response = await apiService.analyzeAudio(mediaId, analysisOptions);
+
+        if (!response.success) {
+          throw new Error(response.message || '解析の開始に失敗しました');
+        }
+
+        // ポーリング開始
+        startPolling(mediaId);
+      } catch (err: any) {
+        setError(err?.message || '解析の開始に失敗しました');
+        setIsAnalyzing(false);
+
+        if (onAnalysisError) {
+          onAnalysisError(err);
+        }
+      }
+    },
+    [reset, startPolling, onAnalysisError]
+  );
+
+  const regeneratePrompts = useCallback(
+    async (mediaId: string, analysisOptions: AudioAnalysisOptions = {}) => {
+      try {
+        setError(null);
+
+        const response = await apiService.regeneratePrompts(mediaId, analysisOptions);
+
+        if (!response.success) {
+          throw new Error(response.message || 'プロンプトの再生成に失敗しました');
+        }
+
+        // 結果を更新
+        if (result) {
+          setResult({
+            ...result,
+            mvPrompts: response.data.mvPrompts
+          });
+        }
+      } catch (err: any) {
+        setError(err?.message || 'プロンプトの再生成に失敗しました');
+
+        if (onAnalysisError) {
+          onAnalysisError(err);
+        }
+      }
+    },
+    [result, onAnalysisError]
+  );
+
+  const updateScenes = useCallback(
+    async (mediaId: string, scenes: any[]) => {
+      try {
+        setError(null);
+
+        const response = await apiService.updateScenePrompts(mediaId, scenes);
+
+        if (!response.success) {
+          throw new Error(response.message || 'シーンの更新に失敗しました');
+        }
+
+        // ローカル状態を更新
+        if (result) {
+          setResult({
+            ...result,
+            mvPrompts: {
+              ...result.mvPrompts,
+              scenes
+            }
+          });
+        }
+      } catch (err: any) {
+        setError(err?.message || 'シーンの更新に失敗しました');
+
+        if (onAnalysisError) {
+          onAnalysisError(err);
+        }
+      }
+    },
+    [result, onAnalysisError]
+  );
+
+  const getAnalysisStatus = useCallback(async (mediaId: string) => {
+    try {
+      const response = await apiService.getAudioAnalysis(mediaId);
+      return response.data;
+    } catch (err) {
+      console.error('Failed to get analysis status:', err);
+      return null;
+    }
+  }, []);
+
+  return {
+    // State
+    isAnalyzing,
+    progress,
+    error,
+    result,
+
+    // Actions
+    startAnalysis,
+    regeneratePrompts,
+    updateScenes,
+    clearError,
+    reset,
+
+    // Utils
+    getAnalysisStatus
+  };
+};
+
+// 便利なヘルパーフック：単一の音声ファイル用
+export const useAudioFileAnalysis = (mediaFile: MediaFileWithAnalysis | null) => {
+  const audioAnalysis = useAudioAnalysis({
+    onAnalysisComplete: (result) => {
+      console.log('Audio analysis completed:', result);
+    },
+    onAnalysisError: (error) => {
+      console.error('Audio analysis error:', error);
+    }
+  });
+
+  // 初期データの設定（必要に応じてローカル状態を初期化）
+  useEffect(() => {
+    if (mediaFile?.analysis) {
+      // 既に解析済みであれば UI を初期化（必要に応じて拡張）
+      audioAnalysis.clearError();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaFile?.id]);
+
+  const analyzeCurrentFile = useCallback(
+    (options?: AudioAnalysisOptions) => {
+      if (!mediaFile) {
+        throw new Error('分析するメディアファイルが選択されていません');
+      }
+      return audioAnalysis.startAnalysis(mediaFile.id, options);
+    },
+    [mediaFile, audioAnalysis]
+  );
+
+  const regenerateCurrentPrompts = useCallback(
+    (options?: AudioAnalysisOptions) => {
+      if (!mediaFile) {
+        throw new Error('プロンプトを再生成するメディアファイルが選択されていません');
+      }
+      return audioAnalysis.regeneratePrompts(mediaFile.id, options);
+    },
+    [mediaFile, audioAnalysis]
+  );
+
+  const updateCurrentScenes = useCallback(
+    (scenes: any[]) => {
+      if (!mediaFile) {
+        throw new Error('シーンを更新するメディアファイルが選択されていません');
+      }
+      return audioAnalysis.updateScenes(mediaFile.id, scenes);
+    },
+    [mediaFile, audioAnalysis]
+  );
+
+  return {
+    ...audioAnalysis,
+    mediaFile,
+    analyzeCurrentFile,
+    regenerateCurrentPrompts,
+    updateCurrentScenes,
+    hasAnalysis: !!mediaFile?.analysis,
+    isAudioFile: mediaFile?.type === 'audio'
+  };
+};
+
+export default useAudioAnalysis;
