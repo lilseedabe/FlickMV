@@ -52,9 +52,7 @@ import {
   GripVertical,
   Monitor,
   Smartphone,
-  Tablet,
-  Maximize,
-  Minimize
+  Tablet
 } from 'lucide-react';
 
 // Types
@@ -132,10 +130,9 @@ const Editor: React.FC = () => {
   
   // Preview size state
   const [previewSize, setPreviewSize] = useState<PreviewSizeKey>('medium');
-  const [showPreviewControls, setShowPreviewControls] = useState(false);
   
   // Video resolution state
-  const [videoResolution, setVideoResolution] = useState<Resolution>(project.settings.resolution);
+  const [videoResolution, setVideoResolution] = useState<Resolution>('9:16');
   
   // Mock user data
   const [user] = useState({
@@ -277,6 +274,14 @@ const Editor: React.FC = () => {
     setShowTutorial(false);
     setTutorialStep(0);
   };
+
+  // Initialize project state properly
+  useEffect(() => {
+    // Always start with a fresh project to avoid cached data
+    const freshProject = createEmptyProject();
+    setProject(freshProject);
+    setVideoResolution(freshProject.settings.resolution);
+  }, []);
 
   useEffect(() => {
     const hasSeenTutorial = localStorage.getItem('hasSeenEditorTutorial');
@@ -449,15 +454,8 @@ const Editor: React.FC = () => {
             </div>
           </div>
 
-          {/* Center - Plan info */}
+          {/* Center - reduced duplicated info */}
           <div className="hidden md:flex items-center space-x-4">
-            {!user.canRemoveWatermark && (
-              <div className="flex items-center space-x-2 bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded-lg text-sm">
-                <Lock className="w-3 h-3" />
-                <span className="hidden sm:inline">透かし付き</span>
-              </div>
-            )}
-            
             <div className="text-sm text-gray-400">
               <span className="hidden sm:inline">エクスポート残り: </span>
               <span className="font-medium text-blue-400">{user.exportStats.remaining}/{user.exportStats.limit}</span>
@@ -659,37 +657,37 @@ const Editor: React.FC = () => {
             </div>
 
             {/* Preview Container */}
-            <div 
-              className="relative bg-black rounded-lg overflow-hidden border border-gray-700 shadow-2xl m-4"
-              style={{ 
-                width: previewWidth, 
-                height: previewHeight,
-                transition: 'all 0.3s ease',
-                maxWidth: '90%',
-                maxHeight: '90%'
-              }}
-            >
-              <Preview 
-                project={project}
-                playheadPosition={playheadPosition}
-                isPlaying={isPlaying}
-              />
-              
-              {!user.canRemoveWatermark && (
-                <div className="absolute bottom-2 right-2 text-xs text-white/60 bg-black/50 px-2 py-1 rounded">
-                  FlickMV
-                </div>
-              )}
-              
-              {project.mediaLibrary.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center text-gray-400">
-                    <Video className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">プレビューなし</p>
-                    <p className="text-xs text-gray-500 mt-1">メディアを追加してください</p>
+            <div className="flex items-center justify-center p-4">
+              <div 
+                className="relative bg-black rounded-lg overflow-hidden border border-gray-700 shadow-2xl flex-shrink-0"
+                style={{ 
+                  width: `${previewWidth}px`, 
+                  height: `${previewHeight}px`,
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <Preview 
+                  project={project}
+                  playheadPosition={playheadPosition}
+                  isPlaying={isPlaying}
+                />
+                
+                {!user.canRemoveWatermark && (
+                  <div className="absolute bottom-2 right-2 text-xs text-white/70 bg-black/60 px-2 py-1 rounded backdrop-blur-sm">
+                    FlickMV
                   </div>
-                </div>
-              )}
+                )}
+                
+                {project.mediaLibrary.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-gray-400">
+                      <Video className="w-8 h-8 mx-auto mb-2" />
+                      <p className="text-sm">プレビューなし</p>
+                      <p className="text-xs text-gray-500 mt-1">メディアを追加してください</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
 
@@ -794,12 +792,17 @@ const Editor: React.FC = () => {
             <span>解像度: {currentVideoResolution.width}×{currentVideoResolution.height}</span>
             <span>FPS: {project.settings.frameRate}</span>
             <span>長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}</span>
-            <span>プレビュー: {Math.round(currentPreviewSize.scale * 100)}% ({previewWidth}×{previewHeight})</span>
+            <span>プレビュー: {Math.round(currentPreviewSize.scale * 100)}%</span>
           </div>
           <div className="flex items-center space-x-6">
             <span>クリップ: {project.timeline.clips.length}</span>
             <span className="capitalize">プラン: {user.plan}</span>
-
+            {!user.canRemoveWatermark && (
+              <span className="flex items-center space-x-1 text-yellow-400">
+                <Lock className="w-3 h-3" />
+                <span>透かし付き</span>
+              </span>
+            )}
             <span className="flex items-center space-x-1">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
               <span>準備完了</span>
