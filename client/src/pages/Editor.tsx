@@ -72,9 +72,10 @@ const VIDEO_RESOLUTIONS: Record<Resolution, { width: number; height: number; lab
 
 // Preview display sizes (for UI only)
 const PREVIEW_SIZES = {
-  small: { scale: 0.15, label: 'S' },
-  medium: { scale: 0.2, label: 'M' },
-  large: { scale: 0.25, label: 'L' }
+  p25: { scale: 0.25, label: '25%' },
+  p50: { scale: 0.5, label: '50%' },
+  p75: { scale: 0.75, label: '75%' },
+  p100: { scale: 1, label: '100%' }
 };
 
 type PreviewSizeKey = keyof typeof PREVIEW_SIZES;
@@ -129,7 +130,7 @@ const Editor: React.FC = () => {
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
   
   // Preview size state
-  const [previewSize, setPreviewSize] = useState<PreviewSizeKey>('medium');
+  const [previewSize, setPreviewSize] = useState<PreviewSizeKey>('p50');
   
   // Video resolution state
   const [videoResolution, setVideoResolution] = useState<Resolution>('9:16');
@@ -596,15 +597,17 @@ const Editor: React.FC = () => {
                       <button
                         key={key}
                         onClick={() => handleResolutionChange(key)}
-                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                        className={`inline-flex items-center justify-between gap-2 px-3 py-2 h-10 rounded-lg text-sm transition-all min-w-[180px] whitespace-nowrap ${
                           videoResolution === key
                             ? 'bg-blue-500 text-white'
-                            : 'bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600'
+                            : 'bg-dark-700 text-gray-300 hover:text-white hover:bg-dark-600'
                         }`}
                       >
-                        <Icon className="w-4 h-4" />
-                        <span className="hidden sm:inline">{resolution.label}</span>
-                        <span className="text-xs">{resolution.width}×{resolution.height}</span>
+                        <span className="inline-flex items-center gap-2">
+                          <Icon className="w-4 h-4" />
+                          <span className="hidden sm:inline">{resolution.label}</span>
+                        </span>
+                        <span className="text-xs font-mono opacity-80">{resolution.width}×{resolution.height}</span>
                       </button>
                     );
                   })}
@@ -643,10 +646,11 @@ const Editor: React.FC = () => {
                     <button
                       key={key}
                       onClick={() => setPreviewSize(key as PreviewSizeKey)}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                      aria-pressed={previewSize === key}
+                      className={`w-14 h-8 rounded text-xs font-medium transition-all text-center ${
                         previewSize === key
                           ? 'bg-cyan-500 text-white'
-                          : 'text-gray-400 hover:text-white hover:bg-dark-600'
+                          : 'text-gray-300 hover:text-white hover:bg-dark-600'
                       }`}
                     >
                       {size.label}

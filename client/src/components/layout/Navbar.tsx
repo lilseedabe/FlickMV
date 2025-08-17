@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Play, 
-  Home, 
-  Settings, 
-  User, 
-  Download,
+import {
+  Play,
+  Home,
+  Settings,
+  User,
   Save,
   Undo2,
   Redo2,
@@ -75,10 +74,6 @@ const Navbar: React.FC = () => {
 
   const handleSave = () => {
     console.log('Saving project...');
-  };
-
-  const handleExport = () => {
-    console.log('Exporting project...');
   };
 
   const handleLogout = async () => {
@@ -176,32 +171,8 @@ const Navbar: React.FC = () => {
         </div>
       )}
 
-      {/* Project Title (Show only in editor) */}
-      {isEditor && (
-        <div className="absolute left-1/2 transform -translate-x-1/2 hidden lg:block">
-          <div className="text-center">
-            <h2 className="text-lg font-semibold text-white">Summer Vibes MV</h2>
-            <p className="text-xs text-gray-400">2分前に自動保存</p>
-          </div>
-        </div>
-      )}
-
       {/* Right Side Actions */}
       <div className="flex items-center space-x-3">
-        {/* Export Button (Editor only) */}
-        {isEditor && (
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleExport}
-            disabled={user?.subscription.exportsRemaining === 0}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-4 h-4" />
-            <span>エクスポート</span>
-          </motion.button>
-        )}
-
         {/* Dashboard Link (Non-editor only) */}
         {!isEditor && (
           <Link 
