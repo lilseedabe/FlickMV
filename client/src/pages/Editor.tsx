@@ -63,6 +63,185 @@ import {
 // Types
 import type { Project, TimelineClip, MediaFile, Resolution } from '../types';
 
+// PopupPreview Manager
+class PreviewWindowManager {
+  private windows: Map<string, Window> = new Map();
+  private eventListeners: Map<string, () => void> = new Map();
+
+  createWindow(config: {
+    id: string;
+    title: string;
+    width: number;
+    height: number;
+    resolution: Resolution;
+  }): Window | null {
+    const { id, title, width, height } = config;
+    
+    const left = window.screenX + (window.outerWidth - width) / 2 + (this.windows.size * 30);
+    const top = window.screenY + (window.outerHeight - height) / 2 + (this.windows.size * 30);
+
+    const windowFeatures = [
+      `width=${width}`,
+      `height=${height}`,
+      `left=${left}`,
+      `top=${top}`,
+      'toolbar=no',
+      'menubar=no',
+      'scrollbars=no',
+      'resizable=yes',
+      'status=no',
+      'directories=no',
+      'location=no'
+    ].join(',');
+
+    try {
+      const newWindow = window.open('', `preview_${id}`, windowFeatures);
+      
+      if (newWindow) {
+        this.initializeWindow(newWindow, config);
+        this.windows.set(id, newWindow);
+        
+        const cleanup = () => {
+          this.windows.delete(id);
+          this.eventListeners.delete(id);
+        };
+        
+        newWindow.addEventListener('beforeunload', cleanup);
+        this.eventListeners.set(id, cleanup);
+        
+        return newWindow;
+      }
+    } catch (error) {
+      console.error('プレビューウィンドウの作成に失敗:', error);
+    }
+    
+    return null;
+  }
+
+  private initializeWindow(window: Window, config: any) {
+    const doc = window.document;
+    doc.title = `FlickMV Preview - ${config.title}`;
+    
+    doc.head.innerHTML = `
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          background: #000; color: #fff;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          overflow: hidden; display: flex; flex-direction: column; height: 100vh;
+        }
+        .preview-header {
+          background: #1a1a1a; padding: 8px 12px; border-bottom: 1px solid #333;
+          display: flex; align-items: center; justify-content: space-between;
+          font-size: 12px; height: 32px;
+        }
+        .preview-title { color: #22c55e; font-weight: bold; }
+        .preview-info { color: #888; }
+        .preview-content {
+          flex: 1; display: flex; align-items: center; justify-content: center;
+          background: #000; position: relative;
+        }
+        .preview-video { max-width: 100%; max-height: 100%; border-radius: 4px; }
+        .preview-placeholder {
+          border: 2px dashed #444; border-radius: 8px; padding: 40px;
+          text-align: center; color: #666;
+        }
+        .preview-controls {
+          position: absolute; bottom: 16px; right: 16px;
+          background: rgba(0,0,0,0.8); border-radius: 8px; padding: 8px;
+          display: flex; gap: 8px;
+        }
+        .control-btn {
+          background: #333; border: none; color: #fff; padding: 4px 8px;
+          border-radius: 4px; font-size: 11px; cursor: pointer;
+        }
+        .control-btn:hover { background: #555; }
+        .resolution-indicator {
+          position: absolute; top: 16px; left: 16px;
+          background: rgba(34, 197, 94, 0.9); color: white;
+          padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;
+        }
+      </style>
+    `;
+    
+    doc.body.innerHTML = `
+      <div class="preview-header">
+        <div class="preview-title">🎯 ${config.title}</div>
+        <div class="preview-info">${config.resolution} プレビュー</div>
+      </div>
+      <div class="preview-content">
+        <div id="preview-container">
+          <div class="preview-placeholder">
+            <div style="font-size: 48px; margin-bottom: 16px;">🎬</div>
+            <div>プレビューを読み込み中...</div>
+          </div>
+        </div>
+        <div class="resolution-indicator">${config.resolution}</div>
+        <div class="preview-controls">
+          <button class="control-btn" onclick="window.close()">✕ 閉じる</button>
+          <button class="control-btn" onclick="toggleFullscreen()">⛶ フルスクリーン</button>
+          <button class="control-btn" onclick="captureFrame()">📷 キャプチャ</button>
+        </div>
+      </div>
+    `;
+    
+    (window as any).toggleFullscreen = () => {
+      if (doc.fullscreenElement) {
+        doc.exitFullscreen();
+      } else {
+        doc.documentElement.requestFullscreen();
+      }
+    };
+    
+    (window as any).captureFrame = () => {
+      alert('フレームキャプチャ機能は開発中です');
+    };
+  }
+
+  updatePreview(windowId: string, content: string) {
+    const window = this.windows.get(windowId);
+    if (!window) return;
+
+    const container = window.document.getElementById('preview-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="preview-video" style="
+          width: 100%; height: 100%; background: linear-gradient(45deg, #1a1a1a, #2a2a2a);
+          display: flex; align-items: center; justify-content: center;
+          color: #22c55e; font-size: 16px; font-weight: bold;
+        ">
+          ${content}
+        </div>
+      `;
+    }
+  }
+
+  closeWindow(windowId: string) {
+    const window = this.windows.get(windowId);
+    if (window) {
+      window.close();
+      this.windows.delete(windowId);
+      
+      const cleanup = this.eventListeners.get(windowId);
+      if (cleanup) {
+        cleanup();
+        this.eventListeners.delete(windowId);
+      }
+    }
+  }
+
+  closeAllWindows() {
+    this.windows.forEach((window, id) => {
+      this.closeWindow(id);
+    });
+  }
+
+  isWindowOpen(windowId: string): boolean {
+    const window = this.windows.get(windowId);
+    return window ? !window.closed : false;
+  }
+}
+
 // Video resolution options
 const VIDEO_RESOLUTIONS: Record<Resolution, { width: number; height: number; label: string; icon: any; windowSize: { width: number; height: number } }> = {
   '9:16': { 
@@ -131,6 +310,9 @@ const createEmptyProject = (): Project => {
   };
 };
 
+// シングルトンインスタンス
+const previewManager = new PreviewWindowManager();
+
 const Editor: React.FC = () => {
   const { projectId } = useParams();
   const [project, setProject] = useState<Project>(createEmptyProject());
@@ -138,6 +320,8 @@ const Editor: React.FC = () => {
   const [playheadPosition, setPlayheadPosition] = useState(0);
   const [selectedClip, setSelectedClip] = useState<TimelineClip | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const [activePanel, setActivePanel] = useState<'media' | 'effects'>('media');
   const [showExportModal, setShowExportModal] = useState(false);
   
@@ -152,8 +336,10 @@ const Editor: React.FC = () => {
   const [timelineHeight, setTimelineHeight] = useState(200);
   const [isResizingTimeline, setIsResizingTimeline] = useState(false);
   
-  // Preview state
+  // Preview state - ポップアウト機能復活
   const [videoResolution, setVideoResolution] = useState<Resolution>('9:16');
+  const [previewWindows, setPreviewWindows] = useState<string[]>([]);
+  const [showPiP, setShowPiP] = useState(false);
   
   // Mock user data
   const [user] = useState({
@@ -173,6 +359,27 @@ const Editor: React.FC = () => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
   const currentVideoResolution = VIDEO_RESOLUTIONS[videoResolution];
+
+  // Tutorial steps
+  const tutorialSteps = [
+    {
+      title: "新しいワークフロー",
+      description: "プレビューは別ウィンドウで確認し、メインでは快適なタイムライン編集に集中できます",
+      target: "timeline-area"
+    },
+    {
+      title: "ポップアウトプレビュー", 
+      description: "ミニプレビューのボタンから実際のサイズでプレビューウィンドウを開けます",
+      target: "mini-preview"
+    },
+    {
+      title: "タイムライン重視設計",
+      description: "十分な高さとトラック数で、複雑な編集作業も快適に行えます",
+      target: "timeline-area"
+    }
+  ];
+
+  const currentTutorialStep = tutorialSteps[tutorialStep] ?? tutorialSteps[0];
 
   // パネル幅の計算（修正版）
   const getLeftPanelWidth = () => isLeftPanelCollapsed ? 48 : leftPanelWidth;
@@ -204,6 +411,61 @@ const Editor: React.FC = () => {
     });
     
     audio.src = url;
+  }, []);
+
+  // Popup preview functions - 復活
+  const createPreviewWindow = useCallback((resolution: Resolution) => {
+    const resolutionData = VIDEO_RESOLUTIONS[resolution];
+    const windowId = `preview_${Date.now()}`;
+    
+    const newWindow = previewManager.createWindow({
+      id: windowId,
+      title: resolutionData.label,
+      width: resolutionData.windowSize.width,
+      height: resolutionData.windowSize.height,
+      resolution
+    });
+
+    if (newWindow) {
+      setPreviewWindows(prev => [...prev, windowId]);
+      
+      // プレビュー内容を更新
+      setTimeout(() => {
+        previewManager.updatePreview(windowId, `
+          <div style="text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 8px;">🎬</div>
+            <div>動画プレビュー</div>
+            <div style="font-size: 12px; opacity: 0.8; margin-top: 8px;">
+              ${resolutionData.width} × ${resolutionData.height}
+            </div>
+          </div>
+        `);
+      }, 100);
+    }
+  }, []);
+
+  const closePreviewWindow = useCallback((windowId: string) => {
+    previewManager.closeWindow(windowId);
+    setPreviewWindows(prev => prev.filter(id => id !== windowId));
+  }, []);
+
+  // Picture-in-Picture toggle - 復活
+  const togglePiP = useCallback(async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setShowPiP(false);
+      } else {
+        // PiP用の仮想ビデオ要素を作成
+        const video = document.createElement('video');
+        video.src = 'data:video/mp4;base64,';
+        video.muted = true;
+        await video.requestPictureInPicture();
+        setShowPiP(true);
+      }
+    } catch (error) {
+      console.error('PiP mode failed:', error);
+    }
   }, []);
 
   // Panel resizing
@@ -303,6 +565,20 @@ const Editor: React.FC = () => {
     }));
   };
 
+  const nextTutorialStep = () => {
+    if (tutorialStep < tutorialSteps.length - 1) {
+      setTutorialStep(tutorialStep + 1);
+    } else {
+      setShowTutorial(false);
+      setTutorialStep(0);
+    }
+  };
+
+  const skipTutorial = () => {
+    setShowTutorial(false);
+    setTutorialStep(0);
+  };
+
   // Initialize
   useEffect(() => {
     const freshProject = createEmptyProject();
@@ -310,8 +586,79 @@ const Editor: React.FC = () => {
     setVideoResolution(freshProject.settings.resolution);
   }, []);
 
+  useEffect(() => {
+    const hasSeenTutorial = localStorage.getItem('hasSeenEditorTutorial_v3');
+    if (!hasSeenTutorial) {
+      setShowTutorial(true);
+      localStorage.setItem('hasSeenEditorTutorial_v3', 'true');
+    }
+  }, []);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      previewManager.closeAllWindows();
+    };
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-dark-900 text-white overflow-hidden">
+      {/* Tutorial Overlay */}
+      <AnimatePresence>
+        {showTutorial && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-dark-800 rounded-2xl p-6 max-w-md w-full m-4 border border-purple-500/30"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">
+                  {currentTutorialStep.title}
+                </h3>
+                <p className="text-gray-300 mb-6">
+                  {currentTutorialStep.description}
+                </p>
+                <div className="flex items-center justify-center space-x-2 mb-6">
+                  {tutorialSteps.map((_, index) => (
+                    <div
+                      key={index}
+                      className={`w-2 h-2 rounded-full ${
+                        index === tutorialStep ? 'bg-purple-500' : 'bg-gray-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={skipTutorial}
+                    className="flex-1 bg-dark-700 text-gray-300 py-2 px-4 rounded-lg font-medium hover:bg-dark-600 transition-all"
+                  >
+                    スキップ
+                  </button>
+                  <button
+                    onClick={nextTutorialStep}
+                    className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-600 transition-all flex items-center justify-center space-x-1"
+                  >
+                    <span>{tutorialStep < tutorialSteps.length - 1 ? '次へ' : '完了'}</span>
+                    {tutorialStep < tutorialSteps.length - 1 && <ChevronRight className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Export Modal */}
       <AnimatePresence>
         {showExportModal && (
@@ -423,6 +770,14 @@ const Editor: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowTutorial(true)}
+              className="hidden sm:flex items-center space-x-2 bg-dark-700 hover:bg-dark-600 px-3 py-1.5 rounded-lg text-sm transition-all"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>ヘルプ</span>
+            </button>
+            
             <button
               onClick={handleExport}
               disabled={user.exportStats.remaining <= 0}
@@ -547,6 +902,7 @@ const Editor: React.FC = () => {
 
         {/* Center Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Resolution Controls */}
           <div className="bg-dark-800 border-b border-dark-700 px-4 py-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -572,6 +928,7 @@ const Editor: React.FC = () => {
             </div>
           </div>
           
+          {/* Mini Preview Area - ポップアウト機能復活 */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -585,9 +942,58 @@ const Editor: React.FC = () => {
               >
                 ミニプレビュー
               </div>
+              
+              {/* Popup Controls - 復活 */}
+              <div className="absolute -top-2 -right-2 flex gap-1">
+                <button
+                  onClick={() => createPreviewWindow(videoResolution)}
+                  className="bg-purple-500 hover:bg-purple-600 text-white p-1.5 rounded-full text-xs transition-all shadow-lg"
+                  title="実際のサイズでプレビューを開く"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={togglePiP}
+                  className={`p-1.5 rounded-full text-xs transition-all shadow-lg ${
+                    showPiP 
+                      ? 'bg-green-500 hover:bg-green-600 text-white' 
+                      : 'bg-gray-600 hover:bg-gray-500 text-white'
+                  }`}
+                  title="Picture-in-Picture"
+                >
+                  <PictureInPicture2 className="w-3 h-3" />
+                </button>
+              </div>
             </div>
+
+            {/* Quick Resolution Buttons - 復活 */}
+            <div className="absolute top-2 left-2 flex gap-1">
+              {Object.entries(VIDEO_RESOLUTIONS)
+                .filter(([key]) => ['9:16', '16:9', '1:1'].includes(key))
+                .map(([resolution, resData]) => {
+                const Icon = resData.icon;
+                return (
+                  <button
+                    key={resolution}
+                    onClick={() => createPreviewWindow(resolution as Resolution)}
+                    className="bg-dark-700/90 hover:bg-dark-600 backdrop-blur-sm border border-dark-600 p-1.5 rounded text-xs transition-all"
+                    title={`${resData.label}でプレビューを開く`}
+                  >
+                    <Icon className="w-3 h-3" />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Preview Windows Status - 復活 */}
+            {previewWindows.length > 0 && (
+              <div className="absolute bottom-2 right-2 bg-green-500/90 backdrop-blur-sm text-white px-2 py-1 rounded text-xs">
+                {previewWindows.length} 個のプレビューが開いています
+              </div>
+            )}
           </motion.div>
 
+          {/* Playback Controls */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -603,6 +1009,7 @@ const Editor: React.FC = () => {
             />
           </motion.div>
 
+          {/* Timeline Area */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -645,7 +1052,7 @@ const Editor: React.FC = () => {
           </motion.div>
         </div>
 
-        {/* Right Panel */}
+        {/* Right Panel - プレビューウィンドウ管理復活 */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ 
@@ -683,6 +1090,53 @@ const Editor: React.FC = () => {
               </div>
               
               <div className="flex-1 overflow-auto p-4">
+                {/* Preview Windows Management - 復活 */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium mb-3">プレビューウィンドウ</h3>
+                  <div className="space-y-2">
+                    {Object.entries(VIDEO_RESOLUTIONS).map(([key, resolution]) => {
+                      const Icon = resolution.icon as any;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => createPreviewWindow(key as Resolution)}
+                          className="w-full bg-dark-700 hover:bg-dark-600 text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Icon className="w-4 h-4" />
+                            {resolution.label}
+                          </span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Active Windows - 復活 */}
+                {previewWindows.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium mb-3">アクティブウィンドウ</h3>
+                    <div className="space-y-2">
+                      {previewWindows.map((windowId, index) => (
+                        <div
+                          key={windowId}
+                          className="flex items-center justify-between bg-dark-700 px-3 py-2 rounded-lg"
+                        >
+                          <span className="text-sm text-gray-300">プレビュー {index + 1}</span>
+                          <button
+                            onClick={() => closePreviewWindow(windowId)}
+                            className="bg-red-500 hover:bg-red-600 text-white p-1 rounded"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Duration Info */}
                 <div className="mb-6 bg-dark-700 rounded-lg p-4">
                   <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
                     <Music className="w-4 h-4 text-green-400" />
@@ -701,6 +1155,7 @@ const Editor: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Quick Settings */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">解像度</label>
@@ -784,6 +1239,7 @@ const Editor: React.FC = () => {
           </div>
           <div className="flex items-center space-x-6">
             <span>クリップ: {project.timeline.clips.length}</span>
+            <span>プレビューウィンドウ: {previewWindows.length}</span>
             <span>左パネル: {isLeftPanelCollapsed ? '非表示' : `${leftPanelWidth}px`}</span>
             <span>右パネル: {isRightPanelCollapsed ? '非表示' : `${rightPanelWidth}px`}</span>
             <span className="capitalize">プラン: {user.plan}</span>
