@@ -259,6 +259,22 @@ const VIDEO_RESOLUTIONS: Record<Resolution, { width: number; height: number; lab
   '4:3': { 
     width: 1440, height: 1080, label: 'クラシック (4:3)', icon: Tablet,
     windowSize: { width: 600, height: 500 }
+  },
+  '720p': { 
+    width: 1280, height: 720, label: 'HD (720p)', icon: Monitor,
+    windowSize: { width: 640, height: 400 }
+  },
+  '1080p': { 
+    width: 1920, height: 1080, label: 'Full HD (1080p)', icon: Monitor,
+    windowSize: { width: 700, height: 450 }
+  },
+  '4K': { 
+    width: 3840, height: 2160, label: '4K Ultra HD', icon: Monitor,
+    windowSize: { width: 800, height: 500 }
+  },
+  'custom': { 
+    width: 1920, height: 1080, label: 'カスタム', icon: Settings,
+    windowSize: { width: 700, height: 450 }
   }
 };
 
@@ -912,8 +928,9 @@ const EditorImproved: React.FC = () => {
 
             {/* Quick Resolution Buttons */}
             <div className="absolute top-2 left-2 flex gap-1">
-              {['9:16', '16:9', '1:1'].map((resolution) => {
-                const resData = VIDEO_RESOLUTIONS[resolution as Resolution];
+              {Object.entries(VIDEO_RESOLUTIONS)
+                .filter(([key]) => ['9:16', '16:9', '1:1'].includes(key))
+                .map(([resolution, resData]) => {
                 const Icon = resData.icon;
                 return (
                   <button
