@@ -12,7 +12,6 @@ import { TutorialProvider } from './contexts/TutorialContext';
 import Dashboard from './pages/Dashboard';
 import Editor from './pages/Editor';
 import EditorEnhanced from './pages/EditorEnhanced';
-import EditorImproved from './pages/EditorImproved';
 import Login from './pages/Login';
 import Pricing from './pages/Pricing';
 
@@ -111,7 +110,6 @@ const AppContent: React.FC = () => {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/editor/:projectId?" element={<Editor />} />
                 <Route path="/editor-v2/:projectId?" element={<EditorEnhanced />} />
-                <Route path="/editor-improved/:projectId?" element={<EditorImproved />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/login" element={<Login />} />
               </Routes>
