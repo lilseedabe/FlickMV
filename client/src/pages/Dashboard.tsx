@@ -293,13 +293,61 @@ const Dashboard: React.FC = () => {
                 <HelpCircle className="w-4 h-4" />
                 <span>ヘルプ</span>
               </button>
-              <Link 
-                to="/editor" 
-                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center space-x-2 shadow-lg"
-              >
-                <Plus className="w-5 h-5" />
-                <span>新しいプロジェクト</span>
-              </Link>
+              
+              {/* Editor Options Dropdown */}
+              <div className="relative group">
+                <button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center space-x-2 shadow-lg">
+                  <Plus className="w-5 h-5" />
+                  <span>新しいプロジェクト</span>
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                <div className="absolute right-0 top-full mt-2 w-80 bg-dark-800 border border-dark-700 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <div className="p-2">
+                    <Link 
+                      to="/editor-improved" 
+                      className="flex items-start space-x-3 p-4 rounded-lg hover:bg-dark-700 transition-all group/item"
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Zap className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-semibold text-white group-hover/item:text-green-400 transition-colors">改善版エディター</h3>
+                          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-medium rounded-full">NEW</span>
+                        </div>
+                        <p className="text-sm text-gray-400 leading-relaxed">
+                          ポップアウトプレビュー機能付き。タイムライン重視の設計で快適な編集体験を提供します。
+                        </p>
+                        <div className="flex items-center space-x-3 mt-2 text-xs text-gray-500">
+                          <span>✨ ポップアウトプレビュー</span>
+                          <span>🎬 タイムライン重視</span>
+                          <span>📱 レスポンシブ対応</span>
+                        </div>
+                      </div>
+                    </Link>
+                    
+                    <div className="h-px bg-dark-700 my-2"></div>
+                    
+                    <Link 
+                      to="/editor" 
+                      className="flex items-start space-x-3 p-4 rounded-lg hover:bg-dark-700 transition-all group/item"
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Video className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-white group-hover/item:text-purple-400 transition-colors mb-1">従来のエディター</h3>
+                        <p className="text-sm text-gray-400 leading-relaxed">
+                          安定した従来のエディター。基本的な編集機能をすべて備えています。
+                        </p>
+                      </div>
+                    </Link>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -412,7 +460,7 @@ const Dashboard: React.FC = () => {
                     whileHover={{ y: -5, scale: 1.02 }}
                     className="bg-dark-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-dark-700/50 hover:border-purple-500/50 transition-all duration-300 group cursor-pointer"
                   >
-                    <Link to={`/editor/${project.id}`}>
+                    <Link to={`/editor-improved/${project.id}`}>
                       {/* Thumbnail */}
                       <div className="relative">
                         <img 
