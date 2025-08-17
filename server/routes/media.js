@@ -6,8 +6,10 @@ const { body, param, query, validationResult } = require('express-validator');
 
 const prisma = require('../prisma/client');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
-const { projectPermission, requireSubscription, actionRateLimit } = require('../middleware/auth');
+const { projectPermission, actionRateLimit } = require('../middleware/auth');
 const mediaService = require('../services/mediaService');
+const audioAnalysisService = require('../services/audioAnalysisService');
+const UsageTrackingService = require('../services/usageTrackingService');
 
 const router = express.Router();
 
@@ -414,6 +416,245 @@ router.get('/file/:id/download',
   })
 );
 
+// @route   POST /api/media/file/:id/audio-analyze
+// @desc    Analyze audio file with Groq Whisper and MoonshotAI
+// @access  Private (All plans with usage limits)
+router.post('/file/:id/audio-analyze',
+  [
+    param('id').isUUID().withMessage('Invalid media file ID'),
+    body('options').optional().isObject().withMessage('Options must be an object'),
+    body('options.genre').optional().isString().withMessage('Genre must be a string'),
+    body('options.mood').optional().isString().withMessage('Mood must be a string'),
+    body('options.style').optional().isString().withMessage('Style must be a string')
+  ],
+  actionRateLimit('audio-analyze', 10, 60 * 60 * 1000), // 10 analyses per hour
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const mediaFile = await prisma.mediaFile.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!mediaFile) {
+      throw new AppError('Media file not found', 404);
+    }
+
+    // Check ownership
+    if (mediaFile.ownerId !== req.user.id) {
+      throw new AppError('Access denied', 403);
+    }
+
+    // Check if it's an audio file
+    if (mediaFile.type !== 'audio') {
+      throw new AppError('File is not an audio file', 400);
+    }
+
+    // Check API keys
+    if (!process.env.GROQ_API_KEY && !process.env.MOONSHOT_API_KEY) {
+      throw new AppError('Audio analysis service is not configured', 500);
+    }
+
+    // プラン別利用制限チェック
+    const usageCheck = await UsageTrackingService.checkUsageLimit(
+      req.user.id,
+      req.user.plan || 'free',
+      'audioAnalysis'
+    );
+
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: 'Usage limit exceeded',
+        error: 'USAGE_LIMIT_EXCEEDED',
+        usage: usageCheck.usage,
+        limits: usageCheck.limits,
+        remaining: usageCheck.remaining,
+        resetDates: usageCheck.resetDates,
+        upgradeRequired: req.user.plan === 'free'
+      });
+    }
+
+    const options = req.body.options || {};
+
+    // 利用回数を記録
+    await UsageTrackingService.recordUsage(req.user.id, 'audioAnalysis', {
+      mediaFileId: mediaFile.id,
+      options,
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    // Start analysis (async)
+    audioAnalysisService.analyzeAudioFile(mediaFile.id, options)
+      .catch(error => {
+        console.error('Background audio analysis failed:', error);
+      });
+
+    res.json({
+      success: true,
+      message: 'Audio analysis started',
+      data: {
+        mediaFileId: mediaFile.id,
+        estimatedTime: '1-2 minutes',
+        status: 'processing',
+        usage: {
+          remaining: usageCheck.remaining,
+          limits: usageCheck.limits
+        }
+      }
+    });
+  })
+);
+
+// @route   GET /api/media/file/:id/audio-analysis
+// @desc    Get audio analysis result
+// @access  Private
+router.get('/file/:id/audio-analysis',
+  param('id').isUUID().withMessage('Invalid media file ID'),
+  asyncHandler(async (req, res) => {
+    const mediaFile = await prisma.mediaFile.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!mediaFile) {
+      throw new AppError('Media file not found', 404);
+    }
+
+    // Check ownership
+    if (mediaFile.ownerId !== req.user.id) {
+      throw new AppError('Access denied', 403);
+    }
+
+    const result = await audioAnalysisService.getAnalysisResult(mediaFile.id);
+    res.json(result);
+  })
+);
+
+// @route   POST /api/media/file/:id/regenerate-prompts
+// @desc    Regenerate MV prompts with new options
+// @access  Private (All plans with usage limits)
+router.post('/file/:id/regenerate-prompts',
+  [
+    param('id').isUUID().withMessage('Invalid media file ID'),
+    body('options').optional().isObject().withMessage('Options must be an object'),
+    body('options.genre').optional().isString().withMessage('Genre must be a string'),
+    body('options.mood').optional().isString().withMessage('Mood must be a string'),
+    body('options.style').optional().isString().withMessage('Style must be a string')
+  ],
+  actionRateLimit('regenerate-prompts', 20, 60 * 60 * 1000), // 20 regenerations per hour
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    // プラン別利用制限チェック
+    const usageCheck = await UsageTrackingService.checkUsageLimit(
+      req.user.id,
+      req.user.plan || 'free',
+      'promptRegeneration'
+    );
+
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: 'Usage limit exceeded',
+        error: 'USAGE_LIMIT_EXCEEDED',
+        usage: usageCheck.usage,
+        limits: usageCheck.limits,
+        remaining: usageCheck.remaining,
+        resetDates: usageCheck.resetDates,
+        upgradeRequired: req.user.plan === 'free'
+      });
+    }
+
+    const options = req.body.options || {};
+    
+    // 利用回数を記録
+    await UsageTrackingService.recordUsage(req.user.id, 'promptRegeneration', {
+      mediaFileId: req.params.id,
+      options,
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+    
+    const result = await audioAnalysisService.regeneratePrompts(req.params.id, options);
+    
+    // 利用状況も一緒に返す
+    result.usage = {
+      remaining: usageCheck.remaining,
+      limits: usageCheck.limits
+    };
+    
+    res.json(result);
+  })
+);
+
+// @route   PUT /api/media/file/:id/scene-prompts
+// @desc    Update scene prompts manually
+// @access  Private
+router.put('/file/:id/scene-prompts',
+  [
+    param('id').isUUID().withMessage('Invalid media file ID'),
+    body('scenes').isArray().withMessage('Scenes must be an array'),
+    body('scenes.*.startTime').isNumeric().withMessage('Start time must be numeric'),
+    body('scenes.*.endTime').isNumeric().withMessage('End time must be numeric'),
+    body('scenes.*.visualPrompt').isString().withMessage('Visual prompt must be a string')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { scenes } = req.body;
+    const result = await audioAnalysisService.updateScenePrompts(req.params.id, scenes);
+    res.json(result);
+  })
+);
+
+// @route   GET /api/media/usage-stats
+// @desc    Get user's audio analysis usage statistics
+// @access  Private
+router.get('/usage-stats',
+  asyncHandler(async (req, res) => {
+    const stats = await UsageTrackingService.getUserUsageStats(
+      req.user.id,
+      req.user.plan || 'free'
+    );
+
+    if (!stats) {
+      throw new AppError('Failed to retrieve usage statistics', 500);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...stats,
+        planInfo: {
+          current: req.user.plan || 'free',
+          available: Object.keys(UsageTrackingService.getPlanLimits())
+        }
+      }
+    });
+  })
+);
+
 // @route   GET /api/media/storage
 // @desc    Get user's storage usage
 // @access  Private
@@ -430,11 +671,12 @@ router.get('/storage',
 
     const limits = {
       'free': 1024 * 1024 * 1024, // 1GB
+      'basic': 10 * 1024 * 1024 * 1024, // 10GB
       'pro': 50 * 1024 * 1024 * 1024, // 50GB
-      'enterprise': 500 * 1024 * 1024 * 1024 // 500GB
+      'premium': 500 * 1024 * 1024 * 1024 // 500GB
     };
 
-    const limit = limits[req.user.subscription] || limits.free;
+    const limit = limits[req.user.plan || 'free'] || limits.free;
 
     const storageInfo = {
       used,

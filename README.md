@@ -10,6 +10,7 @@ FlickMVは、AIの力で誰でも簡単にプロレベルのミュージック�
 - **自動編集:** 音楽に合わせたビート同期編集
 - **インテリジェントエフェクト:** AIによる最適エフェクト提案
 - **自動カラーマッチング:** 統一感のある色調補正
+- **🎵 音声解析・MVプロンプト生成 (NEW!):** Groq Whisper-large-v3による音声テキスト化とAIによるシーン別映像プロンプト自動生成
 
 ### 🎨 エディター機能
 - **タイムライン編集:** 直感的なドラッグ&ドロップ
@@ -41,6 +42,7 @@ FlickMVは、AIの力で誰でも簡単にプロレベルのミュージック�
 - **Cloud Run** for スケーラブルワーカー
 - **Cloudflare R2** for ストレージ
 - **Supabase** for データベースホスティング
+- **Groq API** for 音声解析 (Whisper-large-v3)
 
 ## 📦 インストール & セットアップ
 
@@ -77,6 +79,9 @@ DATABASE_URL=postgresql://user:password@localhost:5432/flickmv
 INTERNAL_API_KEY=your-secret-key
 CLIENT_URL=http://localhost:3000
 
+# AI Services
+GROQ_API_KEY=your-groq-api-key
+
 # クラウドストレージ (オプション)
 R2_ENDPOINT=https://your-account.r2.cloudflarestorage.com
 R2_BUCKET=flickmv-exports
@@ -85,6 +90,32 @@ R2_SECRET_ACCESS_KEY=your-secret-key
 ```
 
 ## 🚀 開発
+
+### 🎵 音声解析機能のセットアップ (NEW!)
+
+GroqのWhisper-large-v3を使用した音声解析機能を利用するには:
+
+```bash
+# 1. 自動セットアップスクリプトを実行 (推奨)
+# Windows
+.\setup-audio-analysis.bat
+
+# macOS/Linux  
+./setup-audio-analysis.sh
+
+# 2. 手動セットアップ
+# Groq APIキーを取得: https://console.groq.com
+# .envファイルに追加:
+echo "GROQ_API_KEY=your-api-key-here" >> server/.env
+
+# 必要なパッケージをインストール
+cd server && npm install axios form-data
+
+# 3. テスト実行
+node server/test-audio-analysis.js
+```
+
+詳細な使用方法については [音声解析ガイド](./AUDIO_ANALYSIS_GUIDE.md) を参照してください。
 
 ### 利用可能なスクリプト
 

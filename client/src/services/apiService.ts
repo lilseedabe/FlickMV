@@ -392,6 +392,40 @@ class APIService {
     });
   }
 
+  // Audio Analysis methods
+  async analyzeAudio(mediaId: string, options?: {
+    genre?: string;
+    mood?: string;
+    style?: string;
+  }): Promise<APIResponse<any>> {
+    return this.request(`/media/file/${mediaId}/audio-analyze`, {
+      method: 'POST',
+      body: JSON.stringify({ options })
+    });
+  }
+
+  async getAudioAnalysis(mediaId: string): Promise<APIResponse<any>> {
+    return this.request(`/media/file/${mediaId}/audio-analysis`);
+  }
+
+  async regeneratePrompts(mediaId: string, options?: {
+    genre?: string;
+    mood?: string;
+    style?: string;
+  }): Promise<APIResponse<any>> {
+    return this.request(`/media/file/${mediaId}/regenerate-prompts`, {
+      method: 'POST',
+      body: JSON.stringify({ options })
+    });
+  }
+
+  async updateScenePrompts(mediaId: string, scenes: any[]): Promise<APIResponse<any>> {
+    return this.request(`/media/file/${mediaId}/scene-prompts`, {
+      method: 'PUT',
+      body: JSON.stringify({ scenes })
+    });
+  }
+
   // Notifications methods
   async getNotifications(): Promise<APIResponse<any[]>> {
     return this.request('/notifications');

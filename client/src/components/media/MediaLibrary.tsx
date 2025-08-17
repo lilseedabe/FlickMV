@@ -12,16 +12,19 @@ import {
   Play,
   Download,
   Trash2,
-  Eye
+  Eye,
+  Brain,
+  Zap
 } from 'lucide-react';
 import type { MediaFile, MediaType } from '@/types';
 
 interface MediaLibraryProps {
   mediaFiles: MediaFile[];
   onUpload: (files: FileList) => void;
+  onAudioAnalyze?: (file: MediaFile) => void;
 }
 
-const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload }) => {
+const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAudioAnalyze }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<MediaType | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -198,6 +201,18 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload }) => 
                         <button className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
                           <Eye className="w-3 h-3" />
                         </button>
+                        {file.type === 'audio' && onAudioAnalyze && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAudioAnalyze(file);
+                            }}
+                            className="p-1.5 bg-purple-500/80 rounded-full hover:bg-purple-600/80 transition-colors"
+                            title="音声解析・MVプロンプト生成"
+                          >
+                            <Brain className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -272,6 +287,18 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload }) => 
                     <button className="p-1.5 hover:bg-dark-500 rounded">
                       <Play className="w-3 h-3" />
                     </button>
+                    {file.type === 'audio' && onAudioAnalyze && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAudioAnalyze(file);
+                        }}
+                        className="p-1.5 hover:bg-purple-500 rounded text-purple-400"
+                        title="音声解析・MVプロンプト生成"
+                      >
+                        <Brain className="w-3 h-3" />
+                      </button>
+                    )}
                     <button className="p-1.5 hover:bg-dark-500 rounded">
                       <Download className="w-3 h-3" />
                     </button>

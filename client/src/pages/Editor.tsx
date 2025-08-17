@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom';
 import MediaLibrary from '../components/media/MediaLibrary';
 import Timeline from '../components/timeline/Timeline';
 import PlaybackControls from '../components/editor/PlaybackControls';
+import AudioAnalysis from '../components/AudioAnalysis/AudioAnalysis';
 
 // Context
 import { useUser } from '../contexts/UserContext';
@@ -341,6 +342,10 @@ const Editor: React.FC = () => {
   const [previewWindows, setPreviewWindows] = useState<string[]>([]);
   const [showPiP, setShowPiP] = useState(false);
   
+  // Audio Analysis state
+  const [showAudioAnalysis, setShowAudioAnalysis] = useState(false);
+  const [selectedAudioFile, setSelectedAudioFile] = useState<MediaFile | null>(null);
+  
   // Mock user data
   const [user] = useState({
     id: 'user1',
@@ -532,6 +537,16 @@ const Editor: React.FC = () => {
       }
     });
     console.log('Uploading files:', files);
+  };
+  
+  const handleAudioAnalyze = (file: MediaFile) => {
+    setSelectedAudioFile(file);
+    setShowAudioAnalysis(true);
+  };
+  
+  const handleCloseAudioAnalysis = () => {
+    setShowAudioAnalysis(false);
+    setSelectedAudioFile(null);
   };
 
   const handleClipSelect = (clip: TimelineClip) => {
@@ -846,6 +861,7 @@ const Editor: React.FC = () => {
                     <MediaLibrary 
                       mediaFiles={project.mediaLibrary}
                       onUpload={handleMediaUpload}
+                      onAudioAnalyze={handleAudioAnalyze}
                     />
                     
                     {project.mediaLibrary.length === 0 && (
@@ -1222,6 +1238,21 @@ const Editor: React.FC = () => {
           )}
         </motion.div>
       </div>
+
+      {/* Audio Analysis Modal */}
+      {showAudioAnalysis && selectedAudioFile && (
+        <AudioAnalysis
+          mediaFile={{
+            id: selectedAudioFile.id,
+            name: selectedAudioFile.name,
+            type: selectedAudioFile.type,
+            url: selectedAudioFile.url,
+            analysis: (selectedAudioFile as any).analysis,
+            processing: (selectedAudioFile as any).processing
+          }}
+          onClose={handleCloseAudioAnalysis}
+        />
+      )}
 
       {/* Status Bar */}
       <motion.div
