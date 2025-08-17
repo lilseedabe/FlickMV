@@ -362,6 +362,7 @@ const Editor: React.FC = () => {
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentVideoResolution = VIDEO_RESOLUTIONS[videoResolution];
 
@@ -531,12 +532,53 @@ const Editor: React.FC = () => {
 
   // Other handlers
   const handleMediaUpload = (files: FileList) => {
-    Array.from(files).forEach(file => {
-      if (file.type.startsWith('audio/')) {
+    const newItems: MediaFile[] = [];
+    Array.from(files).forEach((file, idx) => {
+      const url = URL.createObjectURL(file);
+      const mime = file.type || '';
+      const topLevel = mime.split('/')[0] as 'image' | 'video' | 'audio' | string;
+      const type: 'image' | 'video' | 'audio' = (topLevel === 'image' || topLevel === 'video' || topLevel === 'audio') ? topLevel : 'image';
+      const format = file.name.includes('.') ? (file.name.split('.').pop() || '').toLowerCase() : (mime.split('/')[1] || '');
+      const item: MediaFile = {
+        id: `media_${Date.now()}_${idx}`,
+        name: file.name,
+        type,
+        url,
+        thumbnail: type === 'image' ? url : undefined,
+        size: file.size,
+        width: undefined,
+        height: undefined,
+        duration: undefined,
+        format: format || mime,
+        uploadedAt: new Date(),
+        metadata: {
+          mimeType: mime
+        }
+      };
+      newItems.push(item);
+
+      // もし音声なら、長さに応じてプロジェクト時間調整（既存ロジックを再利用）
+      if (type === 'audio') {
         handleAudioUpload(file);
+        // メタデータで duration を取得して反映（任意）
+        const audioEl = new Audio();
+        audioEl.addEventListener('loadedmetadata', () => {
+          const dur = Math.ceil(audioEl.duration || 0);
+          setProject(prev => ({
+            ...prev,
+            mediaLibrary: prev.mediaLibrary.map(m => m.id === item.id ? { ...m, duration: dur } : m)
+          }));
+          URL.revokeObjectURL(audioEl.src);
+        });
+        audioEl.src = url;
       }
     });
-    console.log('Uploading files:', files);
+
+    // state に反映してライブラリに表示
+    setProject(prev => ({
+      ...prev,
+      mediaLibrary: [...prev.mediaLibrary, ...newItems]
+    }));
   };
   
   const handleAudioAnalyze = (file: MediaFile) => {
@@ -853,12 +895,29 @@ const Editor: React.FC = () => {
               <div className="flex-1 overflow-hidden">
                 {activePanel === 'media' && (
                   <div className="p-4">
-                    <button className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 mb-4">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 mb-4"
+                    >
                       <Upload className="w-5 h-5" />
                       <span>ファイルをアップロード</span>
                     </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,video/*,audio/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleMediaUpload(e.target.files);
+                          // 連続アップロードで同じファイル選択も発火するように value リセット
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                    />
                     
-                    <MediaLibrary 
+                    <MediaLibrary
                       mediaFiles={project.mediaLibrary}
                       onUpload={handleMediaUpload}
                       onAudioAnalyze={handleAudioAnalyze}
