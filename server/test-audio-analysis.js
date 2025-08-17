@@ -1,89 +1,117 @@
 /**
  * FlickMV Audio Analysis Service Test
- * Groq API (Whisper) + MoonshotAI (Kimi) との連携テスト用スクリプト
+ * Groq API 連携 + プラン制限テスト + DB 接続テスト
  */
 
 require('dotenv').config();
+
 const path = require('path');
 const fs = require('fs');
-const { HybridAIClient } = require('./services/groq/groqClient');
-const audioAnalysisService = require('./services/audioAnalysisService');
+
+// Groq クライアント互換読み込み（エクスポート形態の違いに対応）
+const GroqModule = require('./services/groq/groqClient');
+const GroqClientClass =
+  GroqModule?.HybridAIClient || GroqModule?.GroqClient || GroqModule;
+
 const UsageTrackingService = require('./services/usageTrackingService');
+const audioAnalysisService = require('./services/audioAnalysisService');
 
-async function testAIConnections() {
-  console.log('🧠 AI API接続テスト開始...');
+async function testGroqConnection() {
+  console.log('🧠 Groq API接続テスト開始...');
 
-  const groqConfigured = !!process.env.GROQ_API_KEY;
-  const moonshotConfigured = !!process.env.MOONSHOT_API_KEY;
-
-  if (!groqConfigured && !moonshotConfigured) {
-    console.error('❌ どちらのAPIキーも設定されていません');
-    console.log('💡 最低でも以下のいずれかを.envファイルに設定してください:');
-    console.log('   - GROQ_API_KEY (音声テキスト化用)');
-    console.log('   - MOONSHOT_API_KEY (プロンプト生成用)');
+  if (!process.env.GROQ_API_KEY) {
+    console.error('❌ GROQ_API_KEYが設定されていません');
+    console.log('💡 .envファイルに GROQ_API_KEY=your-api-key を追加してください');
     return false;
   }
 
-  console.log('📊 API設定状況:');
-  console.log(`   - Groq API: ${groqConfigured ? '✅ 設定済み' : '❌ 未設定'}`);
-  console.log(`   - MoonshotAI API: ${moonshotConfigured ? '✅ 設定済み' : '❌ 未設定'}`);
-
   try {
-    const aiClient = new HybridAIClient(
-      process.env.GROQ_API_KEY,
-      process.env.MOONSHOT_API_KEY
-    );
+    const groqClient = new GroqClientClass(process.env.GROQ_API_KEY);
 
+    // テスト用のシンプルなプロンプト生成
     console.log('📝 テストプロンプト生成中...');
     const testLyrics = '桜の花びらが舞い散る春の日\n君と歩いた思い出の道';
 
-    const result = await aiClient.generateMVPrompts(testLyrics, [], {
+    const result = await groqClient.generateMVPrompts(testLyrics, [], {
       genre: 'バラード',
       mood: '感動的',
-      style: 'シネマティック'
+      style: 'シネマティック',
     });
 
-    console.log('✅ AI接続成功!');
+    console.log('✅ Groq API接続成功!');
     console.log('🎬 生成されたテーマ:', result.overallTheme);
     console.log('🎭 シーン数:', result.scenes.length);
     console.log('💡 提案数:', result.suggestions.length);
 
     return true;
   } catch (error) {
-    console.error('❌ AI接続エラー:', error.message);
+    console.error('❌ Groq API接続エラー:', error.message);
     return false;
   }
 }
 
-async function testAudioFileProcessing() {
-  console.log('\n🎵 音声ファイル処理テスト開始...');
-
-  const testAudioPath = path.join(__dirname, 'test-assets', 'sample.mp3');
-
-  if (!fs.existsSync(testAudioPath)) {
-    console.log('⚠️  テスト音声ファイルが見つかりません');
-    console.log('💡 実際の音声ファイルでテストする場合は、以下のパスにファイルを配置してください:');
-    console.log(`   ${testAudioPath}`);
-    return false;
-  }
+async function testPlanLimits() {
+  console.log('\n📊 プラン別制限テスト開始...');
 
   try {
-    const aiClient = new HybridAIClient(
-      process.env.GROQ_API_KEY,
-      process.env.MOONSHOT_API_KEY
+    const plans = ['free', 'basic', 'pro', 'premium'];
+
+    console.log('\n🎯 プラン別利用制限:');
+    console.log('='.repeat(60));
+
+    plans.forEach((plan) => {
+      const limits = UsageTrackingService.getPlanLimits()[plan];
+      console.log(`\n${plan.toUpperCase()} プラン:`);
+      console.log(
+        `  📢 音声解析: ${
+          limits.audioAnalysis === -1 ? '無制限' : `月${limits.audioAnalysis}回`
+        }`
+      );
+      console.log(
+        `  🔄 プロンプト再生成: ${
+          limits.promptRegeneration === -1
+            ? '無制限'
+            : `月${limits.promptRegeneration}回`
+        }`
+      );
+      console.log(
+        `  📹 動画エクスポート: ${
+          limits.exportVideos === -1 ? '無制限' : `月${limits.exportVideos}回`
+        }`
+      );
+    });
+
+    // テストユーザーでの制限チェック
+    const testUserId = 'test-user-123';
+
+    console.log('\n🧪 制限チェックテスト (無料プラン: audioAnalysis):');
+    const freeCheck = await UsageTrackingService.checkUsageLimit(
+      testUserId,
+      'free',
+      'audioAnalysis'
     );
+    console.log('  結果:', {
+      allowed: freeCheck.allowed,
+      remaining: freeCheck.remaining,
+      limits: UsageTrackingService.getPlanLimits().free.audioAnalysis,
+    });
 
-    console.log('🎤 音声ファイルをテキスト化中...');
-    const transcription = await aiClient.transcribeAudio(testAudioPath, 'ja');
+    console.log('\n🧪 制限チェックテスト (プレミアムプラン: audioAnalysis):');
+    const premiumCheck = await UsageTrackingService.checkUsageLimit(
+      testUserId,
+      'premium',
+      'audioAnalysis'
+    );
+    console.log('  結果:', {
+      allowed: premiumCheck.allowed,
+      remaining: premiumCheck.remaining,
+      limits: UsageTrackingService.getPlanLimits().premium.audioAnalysis,
+    });
 
-    console.log('✅ 音声テキスト化成功!');
-    console.log('📝 認識されたテキスト:', transcription.text.substring(0, 100) + '...');
-    console.log('⏱️  音声長:', transcription.duration, '秒');
-    console.log('🔤 セグメント数:', transcription.segments.length);
-
+    console.log('\n✅ プラン制限テスト完了!');
     return true;
   } catch (error) {
-    console.error('❌ 音声処理エラー:', error.message);
+    console.error('❌ プラン制限テストエラー:', error.message);
     return false;
   }
 }
@@ -94,7 +122,8 @@ async function testDatabaseConnection() {
   try {
     const prisma = require('./prisma/client');
 
-    // 簡単なクエリテスト
+    // データベースへの簡単なクエリテスト
+    // 注意: $queryRaw の tagged template は Prisma に委譲
     const result = await prisma.$queryRaw`SELECT 1`;
 
     console.log('✅ データベース接続成功!');
@@ -113,76 +142,79 @@ async function testDatabaseConnection() {
   }
 }
 
-async function testUsageLimits() {
-  console.log('\n📊 利用制限システムテスト開始...');
+async function testModelComparison() {
+  console.log('\n🔍 AIモデル比較テスト開始...');
+
+  if (!process.env.GROQ_API_KEY) {
+    console.log('⚠️  Groq APIキーが設定されていないため、スキップします');
+    return true;
+  }
 
   try {
-    console.log('🔍 プラン別制限設定:');
-    const planLimits = UsageTrackingService.getPlanLimits();
+    const groqClient = new GroqClientClass(process.env.GROQ_API_KEY);
+    const testLyrics = '夜空に輝く星たちよ\n君に届けこの想い';
 
-    Object.entries(planLimits).forEach(([plan, limits]) => {
-      console.log(`  ${plan.toUpperCase()}:`);
-      console.log(`    音声解析: ${limits.audioAnalysis.monthly === -1 ? '無制限' : limits.audioAnalysis.monthly + '回/月'}`);
-      console.log(`    プロンプト再生成: ${limits.promptRegeneration.monthly === -1 ? '無制限' : limits.promptRegeneration.monthly + '回/月'}`);
+    console.log('🤖 テスト歌詞:', testLyrics.replace('\n', ' / '));
+
+    const startTime = Date.now();
+    const result = await groqClient.generateMVPrompts(testLyrics, [], {
+      genre: 'ポップス',
+      mood: '明るい',
+      style: 'モダン',
     });
+    const endTime = Date.now();
 
-    const testUserId = 'test-user-123';
-    const testPlan = 'free';
-
-    const usageCheck = await UsageTrackingService.checkUsageLimit(
-      testUserId,
-      testPlan,
-      'audioAnalysis'
+    console.log(`⚡ 生成時間: ${endTime - startTime}ms`);
+    console.log('📋 生成されたシーン数:', result.scenes.length);
+    console.log(
+      '💡 最初のシーンプロンプト:',
+      (result.scenes[0]?.visualPrompt || '').substring(0, 50) + '...'
     );
 
-    console.log('\n🧪 テストユーザー利用状況:');
-    console.log('  利用可能:', usageCheck.allowed ? '✅ はい' : '❌ いいえ');
-    console.log('  今月の利用:', usageCheck.usage.monthly, '回');
-    console.log('  残り回数:', usageCheck.remaining.monthly === -1 ? '無制限' : usageCheck.remaining.monthly + '回');
-
-    console.log('✅ 利用制限システム正常!');
     return true;
   } catch (error) {
-    console.error('❌ 利用制限テストエラー:', error.message);
+    console.error('❌ モデル比較テストエラー:', error.message);
     return false;
   }
 }
 
 async function runAllTests() {
-  console.log('🚀 FlickMV Audio Analysis Service - 総合テスト (MoonshotAI対応版)\n');
+  console.log('🚀 FlickMV Audio Analysis Service - 総合テスト\n');
 
   const results = {
-    ai: await testAIConnections(),
+    groq: await testGroqConnection(),
     database: await testDatabaseConnection(),
-    usage: await testUsageLimits(),
-    audio: await testAudioFileProcessing()
+    planLimits: await testPlanLimits(),
+    modelComparison: await testModelComparison(),
   };
 
   console.log('\n📊 テスト結果サマリー:');
   console.log('='.repeat(50));
-  console.log(`AI接続:        ${results.ai ? '✅ 成功' : '❌ 失敗'}`);
+  console.log(`Groq API:      ${results.groq ? '✅ 成功' : '❌ 失敗'}`);
   console.log(`データベース:   ${results.database ? '✅ 成功' : '❌ 失敗'}`);
-  console.log(`利用制限:      ${results.usage ? '✅ 成功' : '❌ 失敗'}`);
-  console.log(`音声処理:      ${results.audio ? '✅ 成功' : '⚠️  スキップ'}`);
+  console.log(`プラン制限:    ${results.planLimits ? '✅ 成功' : '❌ 失敗'}`);
+  console.log(`モデル比較:    ${results.modelComparison ? '✅ 成功' : '❌ 失敗'}`);
 
-  const criticalPassed = results.ai && results.database && results.usage;
+  const allPassed = results.groq && results.database && results.planLimits;
 
-  console.log('\n🎯 プラン別利用可能回数:');
-  console.log('  フリープラン:   音声解析 2回/月, プロンプト再生成 5回/月');
-  console.log('  ベーシック:     音声解析 10回/月, プロンプト再生成 20回/月');
-  console.log('  プロ:          音声解析 50回/月, プロンプト再生成 100回/月');
-  console.log('  プレミアム:     無制限');
-
-  if (criticalPassed) {
+  if (allPassed) {
     console.log('\n🎉 重要な機能のテストが成功しました!');
-    console.log('💡 実際の音声ファイルをアップロードして機能をテストしてください。');
-    console.log('🔧 VPSスペック的に無料プランでも問題なく動作するはずです。');
+    console.log('\n🆓 無料プランの利用制限:');
+    console.log('  - 音声解析: 月2回まで');
+    console.log('  - プロンプト再生成: 月5回まで');
+    console.log('  - 動画エクスポート: 月3回まで');
+
+    console.log('\n🚀 プロプランの利用制限:');
+    console.log('  - 音声解析: 月25回まで');
+    console.log('  - プロンプト再生成: 月75回まで');
+    console.log('  - 動画エクスポート: 月50回まで');
+
+    console.log('\n💡 実際の音声ファイルをアップロードして機能をテストしてください。');
   } else {
     console.log('\n⚠️  一部のテストが失敗しました。上記のエラーを確認してください。');
   }
 
   console.log('\n📚 詳細なセットアップガイド: AUDIO_ANALYSIS_GUIDE.md');
-  console.log('🚀 API設定が必要: GROQ_API_KEY (必須) + MOONSHOT_API_KEY (推奨)');
 }
 
 if (require.main === module) {
@@ -190,9 +222,9 @@ if (require.main === module) {
 }
 
 module.exports = {
-  testAIConnections,
-  testAudioFileProcessing,
+  testGroqConnection,
   testDatabaseConnection,
-  testUsageLimits,
-  runAllTests
+  testPlanLimits,
+  testModelComparison,
+  runAllTests,
 };

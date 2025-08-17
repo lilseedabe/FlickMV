@@ -1,229 +1,281 @@
 /**
  * Usage Tracking Service
- * プラン別利用回数制限の管理
+ * プラン別の利用制限と追跡を管理
  */
 
 const prisma = require('../prisma/client');
 
 class UsageTrackingService {
   /**
-   * プラン別制限設定
+   * プラン別の月間利用制限
    */
-  static PLAN_LIMITS = {
-    free: {
-      audioAnalysis: { monthly: 2, daily: 1 },
-      promptRegeneration: { monthly: 5, daily: 2 }
-    },
-    basic: {
-      audioAnalysis: { monthly: 10, daily: 3 },
-      promptRegeneration: { monthly: 20, daily: 5 }
-    },
-    pro: {
-      audioAnalysis: { monthly: 50, daily: 10 },
-      promptRegeneration: { monthly: 100, daily: 20 }
-    },
-    premium: {
-      audioAnalysis: { monthly: -1, daily: -1 }, // 無制限
-      promptRegeneration: { monthly: -1, daily: -1 } // 無制限
-    }
-  };
+  static getPlanLimits() {
+    return {
+      free: {
+        audioAnalysis: 2,          // 無料: 月2回まで
+        promptRegeneration: 5,     // 無料: 月5回まで
+        exportVideos: 3            // 無料: 月3回まで
+      },
+      basic: {
+        audioAnalysis: 8,          // ベーシック: 月8回まで
+        promptRegeneration: 20,    // ベーシック: 月20回まで
+        exportVideos: 15           // ベーシック: 月15回まで
+      },
+      pro: {
+        audioAnalysis: 25,         // プロ: 月25回まで
+        promptRegeneration: 75,    // プロ: 月75回まで
+        exportVideos: 50           // プロ: 月50回まで
+      },
+      premium: {
+        audioAnalysis: -1,         // プレミアム: 無制限
+        promptRegeneration: -1,    // プレミアム: 無制限
+        exportVideos: -1           // プレミアム: 無制限
+      }
+    };
+  }
 
   /**
-   * 利用回数をチェック
+   * ユーザーの利用制限をチェック
    * @param {string} userId - ユーザーID
-   * @param {string} userPlan - ユーザープラン
-   * @param {'audioAnalysis'|'promptRegeneration'} action - アクション種別
-   * @returns {Promise<{allowed: boolean, usage: {monthly:number,daily:number}, limits: Object, remaining: {monthly:number,daily:number}, resetDates: {monthly:Date,daily:Date}}>}
+   * @param {string} plan - プラン名
+   * @param {string} feature - 機能名
+   * @returns {Promise<{allowed: boolean, usage: object, limits: object, remaining: object, resetDates: object}>}
    */
-  static async checkUsageLimit(userId, userPlan, action) {
+  static async checkUsageLimit(userId, plan = 'free', feature) {
     try {
-      const limits = this.PLAN_LIMITS[userPlan] || this.PLAN_LIMITS.free;
-      const actionLimits = limits[action];
+      const limits = this.getPlanLimits()[plan] || this.getPlanLimits().free;
+      const featureLimit = limits[feature];
 
-      if (!actionLimits) {
-        // 未定義アクションは許可
+      // 無制限の場合(-1)
+      if (featureLimit === -1) {
         return {
           allowed: true,
-          usage: { monthly: 0, daily: 0 },
-          limits: { monthly: -1, daily: -1 },
-          remaining: { monthly: -1, daily: -1 },
-          resetDates: {
-            monthly: new Date(),
-            daily: new Date()
-          }
+          usage: { [feature]: 0 },
+          limits,
+          remaining: { [feature]: -1 },
+          resetDates: {}
         };
       }
 
-      // 無制限プランの場合
-      if (actionLimits.monthly === -1) {
-        return {
-          allowed: true,
-          usage: { monthly: 0, daily: 0 },
-          limits: actionLimits,
-          remaining: { monthly: -1, daily: -1 },
-          resetDates: {
-            monthly: new Date(),
-            daily: new Date()
-          }
-        };
-      }
+      // 今月の使用状況を取得
+      const currentMonth = new Date();
+      const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
 
-      // 現在の日付
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // データベースから使用回数を取得
+      const usage = await this.getCurrentMonthUsage(userId, feature, monthStart, monthEnd);
 
-      // 月間利用回数を取得
-      const monthlyUsage = await this.getUsageCount(userId, action, startOfMonth);
+      const remaining = Math.max(0, featureLimit - usage);
+      const allowed = remaining > 0;
 
-      // 日間利用回数を取得
-      const dailyUsage = await this.getUsageCount(userId, action, startOfDay);
-
-      // 制限チェック
-      const monthlyAllowed = actionLimits.monthly === -1 || monthlyUsage < actionLimits.monthly;
-      const dailyAllowed = actionLimits.daily === -1 || dailyUsage < actionLimits.daily;
-
-      const allowed = monthlyAllowed && dailyAllowed;
+      // 次のリセット日
+      const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
 
       return {
         allowed,
-        usage: {
-          monthly: monthlyUsage,
-          daily: dailyUsage
-        },
-        limits: actionLimits,
-        remaining: {
-          monthly: actionLimits.monthly === -1 ? -1 : Math.max(0, actionLimits.monthly - monthlyUsage),
-          daily: actionLimits.daily === -1 ? -1 : Math.max(0, actionLimits.daily - dailyUsage)
-        },
+        usage: { [feature]: usage },
+        limits,
+        remaining: { [feature]: remaining },
         resetDates: {
-          monthly: new Date(now.getFullYear(), now.getMonth() + 1, 1),
-          daily: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+          monthly: nextMonth.toISOString()
         }
       };
     } catch (error) {
       console.error('Usage limit check error:', error);
-      // エラー時は制限なしで許可（安全側に倒す）
+      // エラーの場合はデフォルトで制限（安全側）
       return {
-        allowed: true,
-        usage: { monthly: 0, daily: 0 },
-        limits: { monthly: -1, daily: -1 },
-        remaining: { monthly: -1, daily: -1 },
-        resetDates: {
-          monthly: new Date(),
-          daily: new Date()
-        },
+        allowed: false,
+        usage: {},
+        limits: {},
+        remaining: {},
+        resetDates: {},
         error: error.message
       };
     }
   }
 
   /**
-   * 利用回数を記録
-   * @param {string} userId - ユーザーID
-   * @param {string} action - アクション種別
-   * @param {Object} metadata - 追加のメタデータ
+   * 今月の使用回数を取得
+   * @param {string} userId
+   * @param {string} feature
+   * @param {Date} monthStart
+   * @param {Date} monthEnd
    */
-  static async recordUsage(userId, action, metadata = {}) {
+  static async getCurrentMonthUsage(userId, feature, monthStart, monthEnd) {
     try {
-      // 利用記録をデータベースに保存
-      // 注意: 実際のデータベーススキーマに応じて調整が必要
-      const usageRecord = {
-        userId,
-        action,
-        timestamp: new Date(),
-        metadata,
-        ip: metadata.ip || null,
-        userAgent: metadata.userAgent || null
-      };
-
-      // UserUsageテーブルがない場合は、メモリまたはファイルベースで管理
-      console.log('Usage recorded:', usageRecord);
-
-      // TODO: 実際のデータベーステーブルに保存
-      // await prisma.userUsage.create({ data: usageRecord });
-
-      return true;
-    } catch (error) {
-      console.error('Usage recording error:', error);
-      return false;
-    }
-  }
-
-  /**
-   * 指定期間の利用回数を取得
-   * @param {string} userId - ユーザーID
-   * @param {string} action - アクション種別
-   * @param {Date} since - 開始日時
-   */
-  static async getUsageCount(userId, action, since) {
-    try {
-      // 簡易実装: メモリベース（本番では適切なDBテーブルを使用）
-      if (!global.usageCache) {
-        global.usageCache = new Map();
+      // usage_logs テーブルがない場合は、mediaFile の解析回数で代用（例）
+      if (feature === 'audioAnalysis') {
+        const count = await prisma.mediaFile.count({
+          where: {
+            ownerId: userId,
+            analysis: { not: null },
+            updatedAt: {
+              gte: monthStart,
+              lte: monthEnd
+            }
+          }
+        });
+        return count;
       }
 
-      const key = `${userId}-${action}-${since.toDateString()}`;
-      const cached = global.usageCache.get(key);
-
-      if (cached && Date.now() - cached.timestamp < 60000) {
-        // 1分キャッシュ
-        return cached.count;
-      }
-
-      // TODO: 実際のデータベースクエリに置き換え
-      /*
-      const count = await prisma.userUsage.count({
-        where: {
-          userId,
-          action,
-          timestamp: { gte: since }
-        }
-      });
-      */
-
-      // 暫定実装: 制限を緩く設定
-      const count = 0;
-
-      global.usageCache.set(key, {
-        count,
-        timestamp: Date.now()
-      });
-
-      return count;
+      // その他の機能は簡易的に0を返す（実装では専用テーブルを使用）
+      return 0;
     } catch (error) {
-      console.error('Usage count retrieval error:', error);
-      // エラー時は0を返す（利用可能として扱う）
+      console.error('Failed to get current month usage:', error);
       return 0;
     }
   }
 
   /**
-   * ユーザーの利用統計を取得
+   * 利用記録を保存
    * @param {string} userId - ユーザーID
-   * @param {string} userPlan - ユーザープラン
+   * @param {string} feature - 機能名
+   * @param {object} metadata - メタデータ
    */
-  static async getUserUsageStats(userId, userPlan) {
+  static async recordUsage(userId, feature, metadata = {}) {
     try {
-      const stats = {
-        audioAnalysis: await this.checkUsageLimit(userId, userPlan, 'audioAnalysis'),
-        promptRegeneration: await this.checkUsageLimit(userId, userPlan, 'promptRegeneration'),
-        plan: userPlan,
-        planLimits: this.PLAN_LIMITS[userPlan] || this.PLAN_LIMITS.free
-      };
+      // 簡易実装: ログをコンソールに出力
+      // 実際の本番環境では dedicated usage_logs テーブルを作成
+      console.log(`📊 Usage recorded: ${userId} used ${feature}`, {
+        timestamp: new Date().toISOString(),
+        metadata
+      });
 
-      return stats;
+      // TODO: データベースに記録
+      // await prisma.usageLog.create({
+      //   data: {
+      //     userId,
+      //     feature,
+      //     metadata,
+      //     createdAt: new Date()
+      //   }
+      // });
+
+      return true;
     } catch (error) {
-      console.error('Usage stats retrieval error:', error);
+      console.error('Failed to record usage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * ユーザーの利用統計を取得
+   * @param {string} userId
+   * @param {string} plan
+   */
+  static async getUserUsageStats(userId, plan = 'free') {
+    try {
+      const limits = this.getPlanLimits()[plan] || this.getPlanLimits().free;
+
+      const currentMonth = new Date();
+      const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
+
+      const stats = {};
+
+      // 各機能の使用状況を取得
+      for (const feature of Object.keys(limits)) {
+        const usage = await this.getCurrentMonthUsage(userId, feature, monthStart, monthEnd);
+        const limit = limits[feature];
+        const remaining = limit === -1 ? -1 : Math.max(0, limit - usage);
+
+        stats[feature] = {
+          used: usage,
+          limit,
+          remaining,
+          percentage: limit === -1 ? 0 : Math.round((usage / Math.max(1, limit)) * 100)
+        };
+      }
+
+      return {
+        plan,
+        period: {
+          start: monthStart.toISOString(),
+          end: monthEnd.toISOString()
+        },
+        features: stats,
+        lastUpdated: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Failed to get usage stats:', error);
       return null;
     }
   }
 
   /**
-   * プラン別制限情報を取得
+   * プラン情報と制限を取得
    */
-  static getPlanLimits() {
-    return this.PLAN_LIMITS;
+  static getPlanInfo(plan = 'free') {
+    const limits = this.getPlanLimits()[plan] || this.getPlanLimits().free;
+
+    return {
+      plan,
+      limits,
+      features: {
+        audioAnalysis: {
+          name: '音声解析',
+          description: 'AI による音声テキスト化と MV プロンプト生成',
+          limit: limits.audioAnalysis
+        },
+        promptRegeneration: {
+          name: 'プロンプト再生成',
+          description: '異なる設定での MV プロンプト再生成',
+          limit: limits.promptRegeneration
+        },
+        exportVideos: {
+          name: '動画エクスポート',
+          description: '完成した MV の動画ファイル出力',
+          limit: limits.exportVideos
+        }
+      }
+    };
+  }
+
+  /**
+   * 制限チェック（ミドルウェア用）
+   */
+  static createLimitCheckMiddleware(feature) {
+    return async (req, res, next) => {
+      try {
+        const userId = req.user?.id;
+        const plan = req.user?.plan || 'free';
+
+        if (!userId) {
+          return res.status(401).json({
+            success: false,
+            message: 'Authentication required',
+            error: 'AUTHENTICATION_REQUIRED'
+          });
+        }
+
+        const usageCheck = await this.checkUsageLimit(userId, plan, feature);
+
+        if (!usageCheck.allowed) {
+          return res.status(429).json({
+            success: false,
+            message: 'Usage limit exceeded',
+            error: 'USAGE_LIMIT_EXCEEDED',
+            usage: usageCheck.usage,
+            limits: usageCheck.limits,
+            remaining: usageCheck.remaining,
+            resetDates: usageCheck.resetDates,
+            upgradeRequired: plan === 'free',
+            planInfo: this.getPlanInfo(plan)
+          });
+        }
+
+        // リクエストオブジェクトに利用状況を添付
+        req.usageInfo = usageCheck;
+        next();
+      } catch (error) {
+        console.error('Usage limit middleware error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to check usage limits',
+          error: 'USAGE_CHECK_FAILED'
+        });
+      }
+    };
   }
 }
 

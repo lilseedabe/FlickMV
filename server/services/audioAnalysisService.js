@@ -1,13 +1,10 @@
-const { HybridAIClient } = require('./groq/groqClient');
+const GroqClient = require('./groq/groqClient');
 const prisma = require('../prisma/client');
 const path = require('path');
 
 class AudioAnalysisService {
   constructor() {
-    this.aiClient = new HybridAIClient(
-      process.env.GROQ_API_KEY,
-      process.env.MOONSHOT_API_KEY
-    );
+    this.groqClient = new GroqClient(process.env.GROQ_API_KEY);
   }
 
   /**
@@ -35,11 +32,11 @@ class AudioAnalysisService {
 
       // 1. 音声をテキスト化
       await this.updateAnalysisStatus(mediaFileId, 'processing', 30);
-      const transcription = await this.aiClient.transcribeAudio(filePath, 'ja');
+      const transcription = await this.groqClient.transcribeAudio(filePath, 'ja');
       
-      // 2. テキストからMVプロンプトを生成
+      // 2. テキストからMVプロンプトを生成（Groq経由でMoonshotAI Kimi使用）
       await this.updateAnalysisStatus(mediaFileId, 'processing', 70);
-      const mvPrompts = await this.aiClient.generateMVPrompts(
+      const mvPrompts = await this.groqClient.generateMVPrompts(
         transcription.text,
         transcription.segments,
         options
@@ -153,7 +150,7 @@ class AudioAnalysisService {
       const transcription = mediaFile.analysis.transcription;
       
       // 新しいプロンプトを生成
-      const mvPrompts = await this.aiClient.generateMVPrompts(
+      const mvPrompts = await this.groqClient.generateMVPrompts(
         transcription.text,
         transcription.segments,
         options

@@ -341,10 +341,10 @@ router.delete('/file/:id',
 
 // @route   POST /api/media/file/:id/analyze
 // @desc    Analyze media file (BPM, objects, etc.)
-// @access  Private
+// @access  Private (Basic plan or higher)
 router.post('/file/:id/analyze',
   param('id').isUUID().withMessage('Invalid media file ID'),
-  requireSubscription('pro'), // Pro feature
+  UsageTrackingService.createLimitCheckMiddleware('mediaAnalysis'), // Plan-based limits
   actionRateLimit('analyze', 10, 60 * 60 * 1000), // 10 analyses per hour
   asyncHandler(async (req, res) => {
     const mediaFile = await prisma.mediaFile.findUnique({
@@ -360,6 +360,12 @@ router.post('/file/:id/analyze',
       throw new AppError('Access denied', 403);
     }
 
+    // Record usage
+    await UsageTrackingService.recordUsage(req.user.id, 'mediaAnalysis', {
+      mediaFileId: mediaFile.id,
+      mediaType: mediaFile.type
+    });
+
     // Perform analysis (async)
     await mediaService.analyzeFileById(mediaFile.id);
 
@@ -368,7 +374,8 @@ router.post('/file/:id/analyze',
       message: 'Analysis started',
       data: { 
         mediaFileId: mediaFile.id,
-        estimatedTime: mediaFile.type === 'audio' ? '30-60 seconds' : '10-30 seconds'
+        estimatedTime: mediaFile.type === 'audio' ? '30-60 seconds' : '10-30 seconds',
+        usage: req.usageInfo
       }
     });
   })

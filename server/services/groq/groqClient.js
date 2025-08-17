@@ -43,16 +43,9 @@ class GroqClient {
       throw new Error(`音声テキスト化に失敗しました: ${error.response?.data?.error?.message || error.message}`);
     }
   }
-}
-
-class MoonshotAIClient {
-  constructor(apiKey) {
-    this.apiKey = apiKey;
-    this.baseURL = 'https://api.moonshot.cn/v1';
-  }
 
   /**
-   * テキストからMV生成プロンプトを作成（Kimi-K2-Instruct使用）
+   * テキストからMV生成プロンプトを作成（moonshotai/kimi-k2-instruct使用）
    * @param {string} lyrics - 歌詞テキスト
    * @param {Array} segments - 音声セグメント（タイムスタンプ付き）
    * @param {Object} options - 追加オプション
@@ -109,30 +102,31 @@ ${segments.map(seg => `${seg.start}s-${seg.end}s: "${seg.text}"`).join('\n')}
 5. 実現可能で魅力的なアイデアを提案する
 6. JSONフォーマットを厳密に守る`;
 
-      const response = await axios.post(`${this.baseURL}/chat/completions`, {
-        model: 'moonshot-v1-8k',
-        messages: [
-          {
-            role: 'system',
-            content: 'あなたは経験豊富な音楽ビデオ制作のプロデューサーです。創造的で実現可能なアイデアを提案してください。必ずJSON形式で回答してください。'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 4000
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = response.data.choices[0]?.message?.content;
-      
+      // まずmoonshotai/kimi-k2-instructを試行
       try {
+        const response = await axios.post(`${this.baseURL}/chat/completions`, {
+          model: 'moonshotai/kimi-k2-instruct',  // MoonshotAI Kimiモデル
+          messages: [
+            {
+              role: 'system',
+              content: 'あなたは経験豊富な音楽ビデオ制作のプロデューサーです。創造的で実現可能なアイデアを提案してください。必ずJSON形式で回答してください。'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 4000
+        }, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const result = response.data.choices[0]?.message?.content;
+        
         // JSONを抽出
         const jsonMatch = result.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
@@ -157,31 +151,27 @@ ${segments.map(seg => `${seg.start}s-${seg.end}s: "${seg.text}"`).join('\n')}
           });
         }
         
+        console.log('✅ MoonshotAI Kimi モデルで生成成功');
         return parsedResult;
-      } catch (parseError) {
-        console.error('MoonshotAI プロンプト解析エラー:', parseError);
-        console.log('Raw response:', result);
-        // フォールバック: シンプルなプロンプト生成
-        return this.generateFallbackPrompts(lyrics, segments);
+        
+      } catch (kimiError) {
+        console.log('⚠️ MoonshotAI Kimi モデルが利用できません、LLaMAにフォールバック:', kimiError.message);
+        throw kimiError; // 次のcatchブロックでLLaMAフォールバックを実行
       }
+      
     } catch (error) {
-      console.error('MoonshotAI prompt generation error:', error.response?.data || error.message);
+      console.error('MoonshotAI Kimi error:', error.response?.data || error.message);
       
-      // Groqでフォールバック（利用可能な場合）
-      if (process.env.GROQ_API_KEY) {
-        console.log('MoonshotAI failed, trying Groq fallback...');
-        return this.generateGroqFallback(lyrics, segments, options);
-      }
-      
-      // 最終フォールバック
-      return this.generateFallbackPrompts(lyrics, segments);
+      // フォールバック: LLaMAを使用
+      console.log('🔄 LLaMA 3.1 70Bにフォールバック中...');
+      return this.generateWithLLaMA(lyrics, segments, options);
     }
   }
 
   /**
-   * Groqでのフォールバック処理
+   * LLaMAでのフォールバック処理
    */
-  async generateGroqFallback(lyrics, segments, options) {
+  async generateWithLLaMA(lyrics, segments, options) {
     try {
       const { genre = '不明', mood = '自動判定', style = 'モダン' } = options;
       
@@ -194,7 +184,7 @@ Style: ${style}
 
 Return JSON with scenes array containing startTime, endTime, lyrics, visualPrompt, mood, colors, keywords.`;
 
-      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await axios.post(`${this.baseURL}/chat/completions`, {
         model: 'llama-3.1-70b-versatile',
         messages: [
           {
@@ -210,7 +200,7 @@ Return JSON with scenes array containing startTime, endTime, lyrics, visualPromp
         max_tokens: 3000
       }, {
         headers: {
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         }
       });
@@ -222,9 +212,9 @@ Return JSON with scenes array containing startTime, endTime, lyrics, visualPromp
         return JSON.parse(jsonMatch[0]);
       }
       
-      throw new Error('Groq fallback failed');
+      throw new Error('LLaMA fallback failed');
     } catch (error) {
-      console.error('Groq fallback error:', error);
+      console.error('LLaMA fallback error:', error);
       return this.generateFallbackPrompts(lyrics, segments);
     }
   }
@@ -271,26 +261,4 @@ Return JSON with scenes array containing startTime, endTime, lyrics, visualPromp
   }
 }
 
-// 複合クライアント：GroqとMoonshotAIを組み合わせ
-class HybridAIClient {
-  constructor(groqApiKey, moonshotApiKey) {
-    this.groqClient = new GroqClient(groqApiKey);
-    this.moonshotClient = new MoonshotAIClient(moonshotApiKey);
-  }
-
-  /**
-   * 音声をテキスト化（Groq Whisper使用）
-   */
-  async transcribeAudio(audioFilePath, language = 'ja') {
-    return this.groqClient.transcribeAudio(audioFilePath, language);
-  }
-
-  /**
-   * プロンプト生成（MoonshotAI Kimi使用、フォールバックあり）
-   */
-  async generateMVPrompts(lyrics, segments = [], options = {}) {
-    return this.moonshotClient.generateMVPrompts(lyrics, segments, options);
-  }
-}
-
-module.exports = { GroqClient, MoonshotAIClient, HybridAIClient };
+module.exports = GroqClient;
