@@ -133,7 +133,8 @@ const AudioAnalysis: React.FC<AudioAnalysisProps> = ({ mediaFile, onClose }) => 
       }, 300000);
     } catch (err: any) {
       setLoading(false);
-      setError(err?.message || '解析に失敗しました');
+      const errorMessage = err?.response?.data?.message || err?.message || '解析に失敗しました';
+      setError(errorMessage);
     }
   };
 

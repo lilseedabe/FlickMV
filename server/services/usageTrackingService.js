@@ -251,9 +251,13 @@ class UsageTrackingService {
         const usageCheck = await this.checkUsageLimit(userId, plan, feature);
 
         if (!usageCheck.allowed) {
+          const friendlyMessage = plan === 'free' 
+            ? `フリープランの今月の利用制限に達しました。来月1日にリセットされます。`
+            : `今月の利用制限に達しました。来月1日にリセットされます。`;
+          
           return res.status(429).json({
             success: false,
-            message: 'Usage limit exceeded',
+            message: friendlyMessage,
             error: 'USAGE_LIMIT_EXCEEDED',
             usage: usageCheck.usage,
             limits: usageCheck.limits,
