@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
   },
   subscription: {
     type: String,
-    enum: ['free', 'pro', 'enterprise'],
+    enum: ['free', 'light', 'standard', 'pro'],
     default: 'free'
   },
   preferences: {
@@ -130,11 +130,13 @@ userSchema.virtual('initials').get(function() {
 userSchema.methods.canCreateProject = function() {
   switch (this.subscription) {
     case 'free':
-      return this.usage.projectsCount < 3;
-    case 'pro':
+      return this.usage.projectsCount < 5;
+    case 'light':
+      return this.usage.projectsCount < 15;
+    case 'standard':
       return this.usage.projectsCount < 50;
-    case 'enterprise':
-      return true;
+    case 'pro':
+      return this.usage.projectsCount < 100;
     default:
       return false;
   }
@@ -144,11 +146,13 @@ userSchema.methods.canCreateProject = function() {
 userSchema.methods.canExport = function() {
   switch (this.subscription) {
     case 'free':
-      return this.usage.exportsThisMonth < 5;
+      return this.usage.exportsThisMonth < 3;
+    case 'light':
+      return this.usage.exportsThisMonth < 10;
+    case 'standard':
+      return this.usage.exportsThisMonth < 25;
     case 'pro':
-      return this.usage.exportsThisMonth < 100;
-    case 'enterprise':
-      return true;
+      return this.usage.exportsThisMonth < 40;
     default:
       return false;
   }

@@ -4,7 +4,7 @@ export interface User {
   name: string;
   email: string;
   avatar?: string;
-  plan: 'free' | 'basic' | 'pro' | 'premium';
+  plan: 'free' | 'light' | 'standard' | 'pro';
   subscription: {
     status: 'active' | 'cancelled' | 'expired' | 'past_due';
     currentPeriodEnd?: Date;
@@ -688,7 +688,7 @@ export interface EditRecipesPanelProps {
 }
 
 // ===== EXPORT CONSTANTS =====
-export const PLAN_TYPES = ['free', 'basic', 'pro', 'premium'] as const;
+export const PLAN_TYPES = ['free', 'light', 'standard', 'pro'] as const;
 export const MEDIA_TYPES = ['image', 'video', 'audio'] as const;
 export const EXPORT_STATUSES = ['queued', 'processing', 'completed', 'failed', 'cancelled'] as const;
 export const WATERMARK_PRESETS = ['minimal', 'branded', 'corner', 'center'] as const;

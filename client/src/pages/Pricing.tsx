@@ -32,7 +32,7 @@ const mockUser = {
   id: 'user1',
   name: 'ユーザー太郎',
   email: 'user@example.com',
-  plan: 'free', // free, basic, pro, premium
+  plan: 'free', // free, light, standard, pro
   subscription: {
     status: 'active',
     currentPeriodEnd: new Date('2024-03-15'),
@@ -41,104 +41,107 @@ const mockUser = {
   usage: {
     exportsThisMonth: 2,
     totalExports: 15,
-    storageUsed: 1.2, // GB
     lastExportDate: new Date('2024-01-20')
   }
 };
 
 const planFeatures = {
   free: {
-    name: 'フリープラン',
+    name: 'フリー',
     price: '¥0',
     period: '永続無料',
     description: '個人利用や学習目的に最適',
     watermark: '必須',
+    processingMethod: 'VPS専用',
+    profitRate: -126,
     features: [
       '基本編集機能',
-      'FlickMV透かし付き',
+      'VPS専用処理',
       '720p出力',
-      '月5回まで出力',
-      '1GBストレージ',
+      '月3本まで出力',
+      '音声解析無制限',
       'コミュニティサポート'
     ],
     limits: {
-      exportsPerMonth: 5,
+      exportsPerMonth: 3,
       maxResolution: '720p',
-      storageGB: 1,
+      audioAnalysis: 'unlimited',
       watermarkRemoval: false
     },
     color: 'gray',
     popular: false
   },
-  basic: {
-    name: 'ベーシック',
-    price: '¥980',
+  light: {
+    name: 'ライト',
+    price: '¥1,480',
     period: '月額',
     description: '個人クリエイター向けの充実機能',
     watermark: '必須',
+    processingMethod: 'GCP専用',
+    profitRate: 36,
     features: [
       '高度編集機能',
-      'FlickMV透かし付き',
+      'GCP専用処理',
       '1080p出力',
-      '月25回まで出力',
-      '10GBストレージ',
-      '優先サポート',
-      'テンプレートライブラリ'
+      '月10本まで出力',
+      '音声解析無制限',
+      '優先サポート'
     ],
     limits: {
-      exportsPerMonth: 25,
+      exportsPerMonth: 10,
       maxResolution: '1080p',
-      storageGB: 10,
+      audioAnalysis: 'unlimited',
       watermarkRemoval: false
     },
     color: 'blue',
     popular: false
   },
-  pro: {
-    name: 'プロ',
-    price: '¥1,980',
+  standard: {
+    name: 'スタンダード',
+    price: '¥2,980',
     period: '月額',
     description: 'プロフェッショナル向けの完全版',
     watermark: '削除可能',
+    processingMethod: 'GCP専用',
+    profitRate: 50,
     features: [
       '全機能利用可能',
-      '透かし削除可能',
-      '4K出力対応',
-      '月100回まで出力',
-      '100GBストレージ',
-      'プレミアムテンプレート',
-      '優先レンダリング',
-      'API連携'
+      'GCP専用処理',
+      '1080p-4K出力対応',
+      '月25本まで出力',
+      '音声解析無制限',
+      '優先レンダリング'
     ],
     limits: {
-      exportsPerMonth: 100,
-      maxResolution: '4K',
-      storageGB: 100,
+      exportsPerMonth: 25,
+      maxResolution: '1080p-4K',
+      audioAnalysis: 'unlimited',
       watermarkRemoval: true
     },
     color: 'purple',
     popular: true
   },
-  premium: {
-    name: 'プレミアム',
-    price: '¥2,980',
+  pro: {
+    name: 'プロ',
+    price: '¥5,480',
     period: '月額',
     description: 'エンタープライズ向け最上位プラン',
     watermark: '削除可能',
+    processingMethod: 'GCP専用',
+    profitRate: 55,
     features: [
       '全機能 + AI機能',
-      '透かし削除可能',
-      '無制限出力',
-      '無制限ストレージ',
+      'GCP専用処理',
+      '4K出力対応',
+      '月40本まで出力',
+      '音声解析無制限',
       '専用サポート',
-      'チーム機能',
-      'カスタムブランディング',
-      'SLA保証'
+      'API連携'
     ],
     limits: {
-      exportsPerMonth: -1, // unlimited
+      exportsPerMonth: 40,
       maxResolution: '4K',
-      storageGB: -1, // unlimited
+      audioAnalysis: 'unlimited',
       watermarkRemoval: true
     },
     color: 'gold',
@@ -188,9 +191,9 @@ const Pricing: React.FC = () => {
   const getPlanIcon = (planKey: string) => {
     switch (planKey) {
       case 'free': return Star;
-      case 'basic': return Zap;
-      case 'pro': return Crown;
-      case 'premium': return Award;
+      case 'light': return Zap;
+      case 'standard': return Crown;
+      case 'pro': return Award;
       default: return Star;
     }
   };
@@ -326,7 +329,7 @@ const Pricing: React.FC = () => {
                   <p className="text-gray-400">{currentPlan.description}</p>
                 </div>
               </div>
-              {user.plan !== 'premium' && (
+              {user.plan !== 'pro' && (
                 <button
                   onClick={() => setSelectedPlan('pro')}
                   className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center space-x-2"
@@ -345,32 +348,21 @@ const Pricing: React.FC = () => {
                 </div>
                 <div className="text-2xl font-bold">
                   {user.usage.exportsThisMonth}
-                  {currentPlan.limits.exportsPerMonth !== -1 && (
-                    <span className="text-sm text-gray-400 font-normal">
-                      / {currentPlan.limits.exportsPerMonth}
-                    </span>
-                  )}
+                  <span className="text-sm text-gray-400 font-normal">
+                    / {currentPlan.limits.exportsPerMonth}本
+                  </span>
                 </div>
-                {remainingExports !== -1 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    残り {remainingExports} 回
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  残り {currentPlan.limits.exportsPerMonth - user.usage.exportsThisMonth} 本
+                </p>
               </div>
 
               <div className="bg-dark-750 rounded-lg p-4">
                 <div className="flex items-center space-x-2 mb-2">
-                  <BarChart3 className="w-4 h-4 text-green-400" />
-                  <span className="text-sm text-gray-400">ストレージ</span>
+                  <Settings className="w-4 h-4 text-green-400" />
+                  <span className="text-sm text-gray-400">処理方式</span>
                 </div>
-                <div className="text-2xl font-bold">
-                  {user.usage.storageUsed}GB
-                  {currentPlan.limits.storageGB !== -1 && (
-                    <span className="text-sm text-gray-400 font-normal">
-                      / {currentPlan.limits.storageGB}GB
-                    </span>
-                  )}
-                </div>
+                <div className="text-2xl font-bold">{currentPlan.processingMethod}</div>
               </div>
 
               <div className="bg-dark-750 rounded-lg p-4">
@@ -383,15 +375,11 @@ const Pricing: React.FC = () => {
 
               <div className="bg-dark-750 rounded-lg p-4">
                 <div className="flex items-center space-x-2 mb-2">
-                  {currentPlan.limits.watermarkRemoval ? (
-                    <Unlock className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <Lock className="w-4 h-4 text-yellow-400" />
-                  )}
-                  <span className="text-sm text-gray-400">透かし</span>
+                  <TrendingUp className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm text-gray-400">利益率</span>
                 </div>
-                <div className="text-lg font-bold">
-                  {currentPlan.limits.watermarkRemoval ? '削除可能' : '必須'}
+                <div className="text-2xl font-bold">
+                  {currentPlan.profitRate > 0 ? `${currentPlan.profitRate}%` : `¥${Math.abs(currentPlan.profitRate)}`}
                 </div>
               </div>
             </div>
@@ -537,40 +525,40 @@ const Pricing: React.FC = () => {
             <div>
               <h3 className="font-semibold mb-2 flex items-center">
                 <Info className="w-4 h-4 text-blue-400 mr-2" />
-                透かしとは何ですか？
+                処理方式の違いについて
               </h3>
               <p className="text-sm text-gray-400">
-                FlickMVの透かしは、出力された動画に表示される小さなロゴマークです。フリープランとベーシックプランでは自動的に追加され、プロプラン以上では削除できます。
+                フリープランはVPS専用、その他のプランはGCP専用で処理します。GCP専用はより高速で安定した処理を提供します。
               </p>
             </div>
             
             <div>
               <h3 className="font-semibold mb-2 flex items-center">
                 <Gift className="w-4 h-4 text-green-400 mr-2" />
-                プランはいつでも変更できますか？
+                音声解析機能について
               </h3>
               <p className="text-sm text-gray-400">
-                はい。いつでもプランをアップグレードできます。ダウングレードは次の請求サイクルから適用されます。
+                全てのプランで音声解析機能を無制限でご利用いただけます。AIによる高精度な音声解析で、音楽に合わせた精度の高い編集が可能です。
               </p>
             </div>
             
             <div>
               <h3 className="font-semibold mb-2 flex items-center">
                 <Calendar className="w-4 h-4 text-purple-400 mr-2" />
-                年額プランの割引について
+                出力本数と利益率について
               </h3>
               <p className="text-sm text-gray-400">
-                年額プランを選択すると、月額プランより20%お得になります。一括でお支払いいただくため、さらにお得にご利用いただけます。
+                プランごとに月間の出力可能本数が設定されています。より高いプランほど利益率が高く、コスト効率を重視するビジネスユーザーに最適です。
               </p>
             </div>
             
             <div>
               <h3 className="font-semibold mb-2 flex items-center">
                 <Shield className="w-4 h-4 text-yellow-400 mr-2" />
-                返金ポリシー
+                プラン変更とアップグレード
               </h3>
               <p className="text-sm text-gray-400">
-                30日間の返金保証を提供しています。サービスにご満足いただけない場合は、全額返金いたします。
+                いつでもプランをアップグレードできます。フリーからライト、スタンダード、プロまで、ご利用状況に合わせて柔軟に変更できます。
               </p>
             </div>
           </div>

@@ -13,14 +13,14 @@ const mockUser: User = {
   subscription: {
     status: 'active',
     exportsRemaining: 3,
-    exportsLimit: 5
+    exportsLimit: 3
   },
   usage: {
-    exportsThisMonth: 2,
-    totalExports: 15,
-    storageUsed: 1.2,
+    exportsThisMonth: 0,
+    totalExports: 0,
+    storageUsed: 0,
     storageLimit: 1,
-    lastExportDate: new Date('2024-01-20')
+    lastExportDate: undefined
   },
   preferences: {
     theme: 'dark',
@@ -39,8 +39,8 @@ const mockNotifications: Notification[] = [
   {
     id: 'notif_1',
     type: 'upgrade',
-    title: 'プロプランで透かしを削除',
-    message: 'プロプランにアップグレードして、動画から透かしを削除しましょう',
+    title: 'スタンダードプランで透かしを削除',
+    message: 'スタンダードプラン以上にアップグレードして、動画から透かしを削除しましょう',
     unread: true,
     createdAt: new Date('2024-01-21'),
     actionUrl: '/pricing',
@@ -48,13 +48,11 @@ const mockNotifications: Notification[] = [
   },
   {
     id: 'notif_2',
-    type: 'warning',
-    title: '出力制限間近',
-    message: 'フリープランの月間出力制限まで残り3回です',
+    type: 'info',
+    title: 'FlickMVへようこそ！',
+    message: 'フリープランでは月3回まで動画をエクスポートできます',
     unread: true,
-    createdAt: new Date('2024-01-20'),
-    actionUrl: '/pricing',
-    actionText: 'アップグレード'
+    createdAt: new Date('2024-01-20')
   },
   {
     id: 'notif_3',
@@ -178,6 +176,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           storageUsed: 0,
           storageLimit: 1,
           lastExportDate: undefined
+        },
+        subscription: {
+          status: 'active',
+          exportsRemaining: 3,
+          exportsLimit: 3
         }
       };
       
@@ -269,10 +272,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Update user plan and subscription details
       const planLimits = {
-        free: { exportsLimit: 5, storageLimit: 1 },
-        basic: { exportsLimit: 25, storageLimit: 10 },
-        pro: { exportsLimit: 100, storageLimit: 100 },
-        premium: { exportsLimit: -1, storageLimit: -1 }
+        free: { exportsLimit: 3, storageLimit: 1 },
+        light: { exportsLimit: 10, storageLimit: 10 },
+        standard: { exportsLimit: 25, storageLimit: 50 },
+        pro: { exportsLimit: 40, storageLimit: 100 }
       };
       
       const limits = planLimits[plan as keyof typeof planLimits] || planLimits.free;
@@ -363,7 +366,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Computed properties
-  const canRemoveWatermark = user?.plan === 'pro' || user?.plan === 'premium';
+  const canRemoveWatermark = user?.plan === 'standard' || user?.plan === 'pro';
   const hasUnreadNotifications = notifications.some(n => n.unread);
   const isUpgradeNeeded = user?.plan === 'free' && user?.subscription.exportsRemaining <= 1;
 
