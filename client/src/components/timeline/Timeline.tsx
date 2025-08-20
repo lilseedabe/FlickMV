@@ -34,6 +34,8 @@ const Timeline: React.FC<TimelineProps> = ({
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [copiedClip, setCopiedClip] = useState<TimelineClip | null>(null);
+  const [isResizing, setIsResizing] = useState<{ clipId: string; edge: 'left' | 'right' } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
 
@@ -42,11 +44,224 @@ const Timeline: React.FC<TimelineProps> = ({
   const trackHeight = 60;
   const audioTrackHeight = 40;
 
+  // クリップ分割機能
+  const splitClipAtPlayhead = () => {
+    if (!selectedClipId) {
+      console.warn('No clip selected for splitting');
+      return;
+    }
+
+    const selectedClip = timeline.clips.find(clip => clip.id === selectedClipId);
+    if (!selectedClip) {
+      console.warn('Selected clip not found');
+      return;
+    }
+
+    // プレイヘッドがクリップの範囲内にあるかチェック
+    const clipEndTime = selectedClip.startTime + selectedClip.duration;
+    if (playheadPosition <= selectedClip.startTime || playheadPosition >= clipEndTime) {
+      console.warn('Playhead is not within the selected clip');
+      return;
+    }
+
+    // 分割位置を計算
+    const splitPosition = playheadPosition - selectedClip.startTime;
+    
+    // 新しいクリップID生成
+    const newClipId = `${selectedClip.id}_split_${Date.now()}`;
+    
+    // 元のクリップ（左側）
+    const leftClip: TimelineClip = {
+      ...selectedClip,
+      duration: splitPosition,
+      trimEnd: selectedClip.trimStart + splitPosition
+    };
+    
+    // 新しいクリップ（右側）
+    const rightClip: TimelineClip = {
+      ...selectedClip,
+      id: newClipId,
+      startTime: playheadPosition,
+      duration: selectedClip.duration - splitPosition,
+      trimStart: selectedClip.trimStart + splitPosition
+    };
+
+    // クリップリストを更新
+    const updatedClips = timeline.clips.map(clip => 
+      clip.id === selectedClipId ? leftClip : clip
+    ).concat(rightClip);
+    
+    const updatedTimeline = {
+      ...timeline,
+      clips: updatedClips
+    };
+    
+    onTimelineUpdate(updatedTimeline);
+    console.log(`✂️ Clip split: ${selectedClip.id} → ${leftClip.id} + ${rightClip.id}`);
+  };
+
+  // クリップコピー機能
+  const copySelectedClip = () => {
+    if (!selectedClipId) {
+      console.warn('No clip selected for copying');
+      return;
+    }
+
+    const selectedClip = timeline.clips.find(clip => clip.id === selectedClipId);
+    if (!selectedClip) {
+      console.warn('Selected clip not found');
+      return;
+    }
+
+    setCopiedClip(selectedClip);
+    console.log(`📋 Clip copied: ${selectedClip.id}`);
+  };
+
+  // クリップペースト機能
+  const pasteClip = () => {
+    if (!copiedClip) {
+      console.warn('No clip in clipboard');
+      return;
+    }
+
+    // プレイヘッド位置に新しいクリップを配置
+    const newClip: TimelineClip = {
+      ...copiedClip,
+      id: `${copiedClip.id}_copy_${Date.now()}`,
+      startTime: playheadPosition,
+      layer: 0 // デフォルトで最初のレイヤーに配置
+    };
+
+    const updatedTimeline = {
+      ...timeline,
+      clips: [...timeline.clips, newClip]
+    };
+    
+    onTimelineUpdate(updatedTimeline);
+    setSelectedClipId(newClip.id);
+    onClipSelect(newClip);
+    console.log(`📌 Clip pasted: ${newClip.id} at ${playheadPosition}s`);
+  };
+
+  // クリップリサイズ開始
+  const handleResizeStart = (clipId: string, edge: 'left' | 'right', e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResizing({ clipId, edge });
+  };
+
+  // クリップリサイズ処理
+  const handleResize = (e: MouseEvent) => {
+    if (!isResizing || !timelineRef.current) return;
+
+    const rect = timelineRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const newTime = pixelToTime(mouseX);
+    
+    const clipToResize = timeline.clips.find(clip => clip.id === isResizing.clipId);
+    if (!clipToResize) return;
+
+    let updatedClip: TimelineClip;
+    
+    if (isResizing.edge === 'left') {
+      // 左端をリサイズ：開始時間とトリム開始を変更
+      const newStartTime = Math.max(0, Math.min(newTime, clipToResize.startTime + clipToResize.duration - 0.1));
+      const timeDiff = newStartTime - clipToResize.startTime;
+      
+      updatedClip = {
+        ...clipToResize,
+        startTime: newStartTime,
+        duration: clipToResize.duration - timeDiff,
+        trimStart: Math.max(0, clipToResize.trimStart + timeDiff)
+      };
+    } else {
+      // 右端をリサイズ：終了時間とトリム終了を変更
+      const maxEndTime = clipToResize.trimEnd;
+      const newDuration = Math.max(0.1, Math.min(newTime - clipToResize.startTime, maxEndTime - clipToResize.trimStart));
+      
+      updatedClip = {
+        ...clipToResize,
+        duration: newDuration,
+        trimEnd: clipToResize.trimStart + newDuration
+      };
+    }
+    
+    const updatedClips = timeline.clips.map(clip => 
+      clip.id === isResizing.clipId ? updatedClip : clip
+    );
+    
+    const updatedTimeline = {
+      ...timeline,
+      clips: updatedClips
+    };
+    
+    onTimelineUpdate(updatedTimeline);
+  };
+
+  // キーボードショートカット
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Ctrl/Cmd + C でコピー
+    if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+      e.preventDefault();
+      copySelectedClip();
+    }
+    // Ctrl/Cmd + V でペースト
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      e.preventDefault();
+      pasteClip();
+    }
+    // S で分割
+    else if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      splitClipAtPlayhead();
+    }
+    // Delete/Backspace で削除
+    else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedClipId) {
+        e.preventDefault();
+        handleClipDelete(selectedClipId);
+      }
+    }
+  };
+
+  // イベントリスナーの追加
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizing) {
+        handleResize(e);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(null);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.cursor = '';
+    };
+  }, [isResizing, selectedClipId, copiedClip, playheadPosition]);
+
   // Convert time to pixel position
   const timeToPixel = (time: number) => time * scale;
   
   // Convert pixel position to time
   const pixelToTime = (pixel: number) => pixel / scale;
+
+  // 選択されたクリップの取得
+  const selectedClip = selectedClipId ? timeline.clips.find(clip => clip.id === selectedClipId) : null;
+  const canSplit = selectedClip && 
+    playheadPosition > selectedClip.startTime && 
+    playheadPosition < selectedClip.startTime + selectedClip.duration;
 
   // Handle clip drag and drop
   const handleClipDragStart = (e: React.DragEvent, clip: TimelineClip) => {
@@ -158,11 +373,20 @@ const Timeline: React.FC<TimelineProps> = ({
       {/* Timeline Header */}
       <div className="bg-dark-800 border-b border-dark-700 p-4 flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <h3 className="text-lg font-semibold text-white">Timeline</h3>
+          <div className="flex items-center space-x-2">
+            <h3 className="text-lg font-semibold text-white">Timeline</h3>
+            {selectedClip && (
+              <div className="text-sm text-purple-400 bg-purple-500/20 px-2 py-1 rounded">
+                {selectedClip.id.slice(-8)} selected
+              </div>
+            )}
+          </div>
+          
           <div className="flex items-center space-x-2">
             <button
               className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
               onClick={() => onTimelineUpdate({ ...timeline, zoom: Math.max(0.25, zoom - 0.25) })}
+              title="Zoom out"
             >
               <ZoomOut className="w-4 h-4 text-dark-400" />
             </button>
@@ -172,20 +396,76 @@ const Timeline: React.FC<TimelineProps> = ({
             <button
               className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
               onClick={() => onTimelineUpdate({ ...timeline, zoom: Math.min(4, zoom + 0.25) })}
+              title="Zoom in"
             >
               <ZoomIn className="w-4 h-4 text-dark-400" />
             </button>
           </div>
+          
+          {/* キーボードショートカット表示 */}
+          <div className="hidden lg:flex items-center space-x-3 text-xs text-gray-400">
+            <span>Shortcuts:</span>
+            <div className="flex items-center space-x-1">
+              <kbd className="px-1 bg-dark-700 rounded">S</kbd>
+              <span>Split</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <kbd className="px-1 bg-dark-700 rounded">Ctrl+C</kbd>
+              <span>Copy</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <kbd className="px-1 bg-dark-700 rounded">Ctrl+V</kbd>
+              <span>Paste</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <kbd className="px-1 bg-dark-700 rounded">Del</kbd>
+              <span>Delete</span>
+            </div>
+          </div>
         </div>
         
         <div className="flex items-center space-x-2">
-          <button className="btn-ghost text-sm">
-            <Copy className="w-4 h-4 mr-1" />
-            Copy
+          <button 
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              copiedClip 
+                ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
+            }`}
+            onClick={copySelectedClip}
+            disabled={!selectedClipId}
+            title="Copy clip (Ctrl+C)"
+          >
+            <Copy className="w-4 h-4" />
+            <span>Copy</span>
+            {copiedClip && <span className="ml-1 text-xs bg-white/20 px-1 rounded">1</span>}
           </button>
-          <button className="btn-ghost text-sm">
-            <Scissors className="w-4 h-4 mr-1" />
-            Split
+          
+          <button 
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              canSplit 
+                ? 'bg-green-500 hover:bg-green-600 text-white' 
+                : 'bg-dark-700 hover:bg-dark-600 text-gray-400 cursor-not-allowed'
+            }`}
+            onClick={splitClipAtPlayhead}
+            disabled={!canSplit}
+            title={canSplit ? "Split clip at playhead (S)" : "Select a clip and position playhead to split"}
+          >
+            <Scissors className="w-4 h-4" />
+            <span>Split</span>
+          </button>
+          
+          <button 
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              copiedClip 
+                ? 'bg-purple-500 hover:bg-purple-600 text-white' 
+                : 'bg-dark-700 hover:bg-dark-600 text-gray-400 cursor-not-allowed'
+            }`}
+            onClick={pasteClip}
+            disabled={!copiedClip}
+            title="Paste clip (Ctrl+V)"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Paste</span>
           </button>
         </div>
       </div>
@@ -256,16 +536,17 @@ const Timeline: React.FC<TimelineProps> = ({
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
-                        className={`absolute timeline-clip ${
+                        className={`absolute timeline-clip group border-2 overflow-hidden ${
                           selectedClipId === clip.id 
-                            ? 'ring-2 ring-primary-400' 
-                            : ''
+                            ? 'ring-2 ring-primary-400 border-primary-300 bg-primary-500/80' 
+                            : 'border-gray-600 bg-blue-500/60 hover:bg-blue-500/80'
                         }`}
                         style={{
                           left: timeToPixel(clip.startTime),
                           width: timeToPixel(clip.duration),
                           height: trackHeight - 8,
-                          top: 4
+                          top: 4,
+                          borderRadius: '6px'
                         }}
                         draggable
                         onDragStart={(e: any) => handleClipDragStart(e, clip)}
@@ -274,20 +555,56 @@ const Timeline: React.FC<TimelineProps> = ({
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
-                        <div className="flex items-center justify-between h-full px-2">
-                          <span className="text-xs font-medium truncate">
-                            Clip {clip.id.slice(-4)}
-                          </span>
+                        {/* 左端リサイズハンドル */}
+                        <div
+                          className="absolute left-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
+                          onMouseDown={(e) => handleResizeStart(clip.id, 'left', e)}
+                          title="Resize clip start"
+                        />
+                        
+                        {/* クリップコンテンツ */}
+                        <div className="flex items-center justify-between h-full px-3 py-1 relative z-10">
+                          <div className="flex flex-col justify-center min-w-0 flex-1">
+                            <span className="text-xs font-semibold text-white truncate">
+                              Clip {clip.id.slice(-4)}
+                            </span>
+                            {selectedClipId === clip.id && (
+                              <div className="text-xs text-white/80 mt-0.5">
+                                {formatTime(clip.startTime)} - {formatTime(clip.startTime + clip.duration)}
+                                <span className="ml-2 text-white/60">({formatTime(clip.duration)})</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* 削除ボタン */}
                           <button
                             className="p-1 hover:bg-red-500 rounded opacity-0 group-hover:opacity-100 transition-all"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleClipDelete(clip.id);
                             }}
+                            title="Delete clip (Delete key)"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3 text-white" />
                           </button>
                         </div>
+                        
+                        {/* 右端リサイズハンドル */}
+                        <div
+                          className="absolute right-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
+                          onMouseDown={(e) => handleResizeStart(clip.id, 'right', e)}
+                          title="Resize clip end"
+                        />
+                        
+                        {/* トリムインジケーター */}
+                        {(clip.trimStart > 0 || clip.trimEnd < (clip.trimEnd || clip.duration)) && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-orange-400/60" title="Trimmed content" />
+                        )}
+                        
+                        {/* 選択インジケーター */}
+                        {selectedClipId === clip.id && (
+                          <div className="absolute inset-0 border-2 border-yellow-400 rounded-md pointer-events-none animate-pulse" />
+                        )}
                       </motion.div>
                     ))}
                 </AnimatePresence>
