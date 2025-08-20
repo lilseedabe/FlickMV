@@ -7,6 +7,7 @@ import MediaLibrary from '../components/media/MediaLibrary';
 import Timeline from '../components/timeline/Timeline';
 import PlaybackControls from '../components/editor/PlaybackControls';
 import AudioAnalysis from '../components/AudioAnalysis/AudioAnalysis';
+import { ExportPanel, ExportProgress } from '../components/export';
 
 // Context
 import { useUser } from '../contexts/UserContext';
@@ -62,7 +63,7 @@ import {
 } from 'lucide-react';
 
 // Types
-import type { Project, TimelineClip, MediaFile, Resolution } from '../types';
+import type { Project, TimelineClip, MediaFile, Resolution, ExportJob } from '../types';
 
 // PopupPreview Manager
 class PreviewWindowManager {
@@ -325,6 +326,11 @@ const Editor: React.FC = () => {
   const [tutorialStep, setTutorialStep] = useState(0);
   const [activePanel, setActivePanel] = useState<'media' | 'effects'>('media');
   const [showExportModal, setShowExportModal] = useState(false);
+  
+  // Export state
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [currentExportJob, setCurrentExportJob] = useState<ExportJob | null>(null);
+  const [showExportProgress, setShowExportProgress] = useState(false);
   
   // Panel state - 修正版
   const [leftPanelWidth, setLeftPanelWidth] = useState(280);
@@ -608,7 +614,22 @@ const Editor: React.FC = () => {
       alert('エクスポート制限に達しました。プランをアップグレードしてください。');
       return;
     }
-    setShowExportModal(true);
+    if (!project.timeline?.clips?.length) {
+      alert('プロジェクトにクリップがありません。メディアを追加してからエクスポートしてください。');
+      return;
+    }
+    setShowExportPanel(true);
+  };
+
+  const handleExportStart = (job: ExportJob) => {
+    setCurrentExportJob(job);
+    setShowExportProgress(true);
+    setShowExportPanel(false);
+  };
+
+  const handleExportComplete = (job: ExportJob) => {
+    console.log('Export completed:', job);
+    // 完了通知や自動ダウンロードなどの処理
   };
   
   const handleResolutionChange = (newResolution: Resolution) => {
@@ -716,90 +737,23 @@ const Editor: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Export Modal */}
-      <AnimatePresence>
-        {showExportModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-dark-800 rounded-2xl p-6 max-w-md w-full m-4 border border-green-500/30"
-            >
-              <div className="text-center">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Download className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">エクスポート設定</h3>
-                
-                <div className="space-y-4 text-left mb-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">解像度</label>
-                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
-                      <option>1080p (推奨)</option>
-                      <option>720p</option>
-                      {user.plan === 'pro' ? (
-                        <option>4K</option>
-                      ) : (
-                        <option disabled>4K (プロプラン以上)</option>
-                      )}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">品質</label>
-                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
-                      <option>高品質</option>
-                      <option>標準</option>
-                      <option>圧縮</option>
-                    </select>
-                  </div>
-                  
-                  {!user.canRemoveWatermark && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                      <div className="flex items-start space-x-2">
-                        <Lock className="w-4 h-4 text-yellow-400 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="text-yellow-400 font-medium">透かし付きでエクスポート</p>
-                          <p className="text-gray-300">透かしを削除するにはプランをアップグレードしてください</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <div className="text-sm text-center">
-                      <p className="text-blue-400">残りエクスポート: {user.exportStats.remaining}/{user.exportStats.limit}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => setShowExportModal(false)}
-                    className="flex-1 bg-dark-700 text-gray-300 py-2 px-4 rounded-lg font-medium hover:bg-dark-600 transition-all"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('Starting export...');
-                      setShowExportModal(false);
-                    }}
-                    className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-600 transition-all"
-                  >
-                    エクスポート開始
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Export Panel */}
+      <ExportPanel
+        project={project}
+        isOpen={showExportPanel}
+        onClose={() => setShowExportPanel(false)}
+        onExportStart={handleExportStart}
+      />
+
+      {/* Export Progress */}
+      {currentExportJob && (
+        <ExportProgress
+          jobId={currentExportJob.id}
+          isVisible={showExportProgress}
+          onClose={() => setShowExportProgress(false)}
+          onComplete={handleExportComplete}
+        />
+      )}
 
       {/* Header */}
       <motion.div

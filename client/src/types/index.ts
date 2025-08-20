@@ -176,6 +176,14 @@ export interface ExportJob {
   name: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
   progress: number; // 0-100
+  settings?: {
+    resolution?: Resolution | string;
+    frameRate?: 24 | 30 | 60;
+    quality?: 'low' | 'medium' | 'high' | 'ultra';
+    format?: 'mp4' | 'webm' | string;
+    includeAudio?: boolean;
+    name?: string;
+  };
   processing?: {
     bossJobId?: string;
     currentStep?: string;
