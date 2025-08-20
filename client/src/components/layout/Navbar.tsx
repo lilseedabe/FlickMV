@@ -25,15 +25,18 @@ import {
 
 // Context
 import { useUser } from '../../contexts/UserContext';
+import { User as UserType } from '../../types';
 
 // Components
 import LoadingScreen from '../ui/LoadingScreen';
 
-const planConfig = {
+type PlanKey = UserType['plan'];
+
+const planConfig: Record<PlanKey, { name: string; color: string; icon: any }> = {
   free: { name: 'フリー', color: 'gray', icon: Star },
-  basic: { name: 'ベーシック', color: 'blue', icon: Sparkles },
-  pro: { name: 'プロ', color: 'purple', icon: Crown },
-  premium: { name: 'プレミアム', color: 'yellow', icon: Award }
+  light: { name: 'ライト', color: 'blue', icon: Sparkles },
+  standard: { name: 'スタンダード', color: 'purple', icon: Crown },
+  pro: { name: 'プロ', color: 'yellow', icon: Award }
 };
 
 const Navbar: React.FC = () => {
@@ -192,7 +195,7 @@ const Navbar: React.FC = () => {
               <span className="text-sm font-medium hidden sm:inline">{userPlan.name}</span>
             </div>
             
-            {user.plan !== 'premium' && (
+            {user.plan !== 'pro' && (
               <Link
                 to="/pricing"
                 className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-1"
