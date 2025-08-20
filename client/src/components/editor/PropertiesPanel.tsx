@@ -15,9 +15,11 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  EyeOff
+  EyeOff,
+  ArrowRightLeft,
+  X
 } from 'lucide-react';
-import type { TimelineClip, ProjectSettings, ClipEffect, EffectType, Resolution } from '@/types';
+import type { TimelineClip, ProjectSettings, ClipEffect, EffectType, Resolution, Transition } from '@/types';
 
 interface PropertiesPanelProps {
   selectedClip: TimelineClip | null;
@@ -34,7 +36,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'clip' | 'project'>('clip');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['basic', 'effects', 'transform'])
+    new Set(['basic', 'effects', 'transitions', 'transform'])
   );
 
   const toggleSection = (sectionId: string) => {
@@ -102,6 +104,52 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     updateClipProperty('effects', updatedEffects);
   };
 
+  // トランジション関連の関数
+  const updateTransition = (direction: 'in' | 'out', transition: Transition | null) => {
+    if (!selectedClip) return;
+    
+    const updatedTransitions = {
+      ...selectedClip.transitions,
+      [direction]: transition
+    };
+    
+    // もしin, outともにnullなら、transitionsプロパティ自体を削除
+    if (!updatedTransitions.in && !updatedTransitions.out) {
+      const { transitions, ...clipWithoutTransitions } = selectedClip;
+      onClipUpdate(clipWithoutTransitions);
+    } else {
+      updateClipProperty('transitions', updatedTransitions);
+    }
+  };
+
+  const addTransition = (direction: 'in' | 'out', type: Transition['type'] = 'crossfade') => {
+    const newTransition: Transition = {
+      type,
+      duration: 0.5,
+      parameters: getDefaultTransitionParameters(type)
+    };
+    
+    updateTransition(direction, newTransition);
+  };
+
+  const removeTransition = (direction: 'in' | 'out') => {
+    updateTransition(direction, null);
+  };
+
+  const updateTransitionProperty = (direction: 'in' | 'out', property: string, value: any) => {
+    if (!selectedClip || !selectedClip.transitions) return;
+    
+    const currentTransition = selectedClip.transitions[direction];
+    if (!currentTransition) return;
+    
+    const updatedTransition = {
+      ...currentTransition,
+      [property]: value
+    };
+    
+    updateTransition(direction, updatedTransition);
+  };
+
   const getDefaultParameters = (type: EffectType): Record<string, any> => {
     switch (type) {
       case 'brightness':
@@ -121,10 +169,163 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     }
   };
 
+  const getDefaultTransitionParameters = (type: Transition['type']): Record<string, any> => {
+    switch (type) {
+      case 'crossfade':
+        return { curve: 'ease-in-out' };
+      case 'slide':
+        return { direction: 'left', easing: 'ease-out' };
+      case 'wipe':
+        return { direction: 'horizontal', softness: 0.1 };
+      case 'cut':
+        return {};
+      default:
+        return {};
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = (seconds % 60).toFixed(1);
     return `${mins}:${parseFloat(secs).toFixed(1).padStart(4, '0')}`;
+  };
+
+  const TransitionControl: React.FC<{ transition: Transition; direction: 'in' | 'out' }> = ({ transition, direction }) => {
+    const renderParameters = () => {
+      switch (transition.type) {
+        case 'crossfade':
+          return (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-dark-300 mb-1">Duration</label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="3"
+                  step="0.1"
+                  value={transition.duration}
+                  onChange={(e) => updateTransitionProperty(direction, 'duration', parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-xs text-dark-400 text-center">
+                  {transition.duration.toFixed(1)}s
+                </div>
+              </div>
+            </div>
+          );
+        
+        case 'slide':
+          return (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-dark-300 mb-1">Duration</label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="3"
+                  step="0.1"
+                  value={transition.duration}
+                  onChange={(e) => updateTransitionProperty(direction, 'duration', parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-xs text-dark-400 text-center">
+                  {transition.duration.toFixed(1)}s
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-dark-300 mb-1">Direction</label>
+                <select
+                  value={transition.parameters?.direction || 'left'}
+                  onChange={(e) => updateTransitionProperty(direction, 'parameters', {
+                    ...transition.parameters,
+                    direction: e.target.value
+                  })}
+                  className="input text-sm"
+                >
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                  <option value="up">Up</option>
+                  <option value="down">Down</option>
+                </select>
+              </div>
+            </div>
+          );
+        
+        case 'wipe':
+          return (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-dark-300 mb-1">Duration</label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="3"
+                  step="0.1"
+                  value={transition.duration}
+                  onChange={(e) => updateTransitionProperty(direction, 'duration', parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-xs text-dark-400 text-center">
+                  {transition.duration.toFixed(1)}s
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-dark-300 mb-1">Direction</label>
+                <select
+                  value={transition.parameters?.direction || 'horizontal'}
+                  onChange={(e) => updateTransitionProperty(direction, 'parameters', {
+                    ...transition.parameters,
+                    direction: e.target.value
+                  })}
+                  className="input text-sm"
+                >
+                  <option value="horizontal">Horizontal</option>
+                  <option value="vertical">Vertical</option>
+                  <option value="diagonal">Diagonal</option>
+                </select>
+              </div>
+            </div>
+          );
+        
+        default:
+          return (
+            <div>
+              <label className="block text-sm text-dark-300 mb-1">Duration</label>
+              <input
+                type="range"
+                min="0.1"
+                max="3"
+                step="0.1"
+                value={transition.duration}
+                onChange={(e) => updateTransitionProperty(direction, 'duration', parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-dark-400 text-center">
+                {transition.duration.toFixed(1)}s
+              </div>
+            </div>
+          );
+      }
+    };
+
+    return (
+      <div className="border border-dark-600 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium capitalize">
+              {direction === 'in' ? 'Transition In' : 'Transition Out'}: {transition.type}
+            </span>
+          </div>
+          <button
+            onClick={() => removeTransition(direction)}
+            className="text-red-400 hover:text-red-300 text-sm"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {renderParameters()}
+      </div>
+    );
   };
 
   const EffectControl: React.FC<{ effect: ClipEffect }> = ({ effect }) => {
@@ -396,6 +597,75 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                           {type.replace('_', ' ')}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+              </Section>
+
+              <Section id="transitions" title="Transitions" icon={<ArrowRightLeft className="w-4 h-4" />}>
+                <div className="space-y-4">
+                  {/* 既存のトランジション */}
+                  {selectedClip.transitions && (
+                    <div className="space-y-3">
+                      {selectedClip.transitions.in && (
+                        <TransitionControl transition={selectedClip.transitions.in} direction="in" />
+                      )}
+                      {selectedClip.transitions.out && (
+                        <TransitionControl transition={selectedClip.transitions.out} direction="out" />
+                      )}
+                    </div>
+                  )}
+                  
+                  {(!selectedClip.transitions || (!selectedClip.transitions.in && !selectedClip.transitions.out)) && (
+                    <div className="text-center py-4 text-dark-400 text-sm">
+                      No transitions applied
+                    </div>
+                  )}
+                  
+                  {/* トランジション追加ボタン */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-dark-300 mb-2">Add Transition</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {!selectedClip.transitions?.in && (
+                          <button
+                            onClick={() => addTransition('in', 'crossfade')}
+                            className="btn-secondary text-xs flex items-center justify-center"
+                          >
+                            <ArrowRightLeft className="w-3 h-3 mr-1" />
+                            Transition In
+                          </button>
+                        )}
+                        {!selectedClip.transitions?.out && (
+                          <button
+                            onClick={() => addTransition('out', 'crossfade')}
+                            className="btn-secondary text-xs flex items-center justify-center"
+                          >
+                            <ArrowRightLeft className="w-3 h-3 mr-1" />
+                            Transition Out
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-dark-300 mb-2">Transition Types</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['crossfade', 'slide', 'wipe', 'cut'].map(type => (
+                          <button
+                            key={type}
+                            onClick={() => {
+                              // 既存のトランジションがない場合はアウトトランジションを追加
+                              if (!selectedClip.transitions?.out) {
+                                addTransition('out', type as Transition['type']);
+                              }
+                            }}
+                            className="btn-secondary text-xs capitalize"
+                          >
+                            {type}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>

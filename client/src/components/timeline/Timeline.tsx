@@ -12,9 +12,11 @@ import {
   ZoomIn,
   ZoomOut,
   Music,
-  Plus
+  Plus,
+  ArrowRightLeft,
+  Shuffle
 } from 'lucide-react';
-import type { Timeline as TimelineType, TimelineClip, AudioTrack } from '@/types';
+import type { Timeline as TimelineType, TimelineClip, AudioTrack, Transition } from '@/types';
 
 interface TimelineProps {
   timeline: TimelineType;
@@ -36,6 +38,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const [dragOffset, setDragOffset] = useState(0);
   const [copiedClip, setCopiedClip] = useState<TimelineClip | null>(null);
   const [isResizing, setIsResizing] = useState<{ clipId: string; edge: 'left' | 'right' } | null>(null);
+  const [isAddingTransition, setIsAddingTransition] = useState<boolean>(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
 
@@ -143,6 +146,107 @@ const Timeline: React.FC<TimelineProps> = ({
     console.log(`📌 Clip pasted: ${newClip.id} at ${playheadPosition}s`);
   };
 
+  // トランジション追加機能
+  const addTransitionBetweenClips = (clipId: string, transitionType: Transition['type'] = 'crossfade') => {
+    const clip = timeline.clips.find(c => c.id === clipId);
+    if (!clip) return;
+
+    // 同じレイヤーの次のクリップを探す
+    const nextClip = timeline.clips
+      .filter(c => c.layer === clip.layer && c.startTime > clip.startTime)
+      .sort((a, b) => a.startTime - b.startTime)[0];
+
+    if (!nextClip) {
+      console.warn('No next clip found for transition');
+      return;
+    }
+
+    // クリップ間の距離を確認
+    const gap = nextClip.startTime - (clip.startTime + clip.duration);
+    const transitionDuration = Math.min(1.0, Math.max(0.5, gap)); // 0.5秒から1秒の間
+
+    if (gap < 0.1) {
+      console.warn('Clips are too close for transition');
+      return;
+    }
+
+    const newTransition: Transition = {
+      type: transitionType,
+      duration: transitionDuration,
+      parameters: getDefaultTransitionParameters(transitionType)
+    };
+
+    // 現在のクリップのout transitionを追加
+    const updatedClips = timeline.clips.map(c => {
+      if (c.id === clipId) {
+        return {
+          ...c,
+          transitions: {
+            ...c.transitions,
+            out: newTransition
+          }
+        };
+      }
+      if (c.id === nextClip.id) {
+        return {
+          ...c,
+          transitions: {
+            ...c.transitions,
+            in: newTransition
+          }
+        };
+      }
+      return c;
+    });
+
+    const updatedTimeline = {
+      ...timeline,
+      clips: updatedClips
+    };
+
+    onTimelineUpdate(updatedTimeline);
+    console.log(`🎬 Transition added: ${clip.id} → ${nextClip.id} (${transitionType})`);
+  };
+
+  // トランジション削除機能
+  const removeTransition = (clipId: string, direction: 'in' | 'out') => {
+    const updatedClips = timeline.clips.map(clip => {
+      if (clip.id === clipId) {
+        const newTransitions = { ...clip.transitions };
+        delete newTransitions[direction];
+        return {
+          ...clip,
+          transitions: Object.keys(newTransitions).length > 0 ? newTransitions : undefined
+        };
+      }
+      return clip;
+    });
+
+    const updatedTimeline = {
+      ...timeline,
+      clips: updatedClips
+    };
+
+    onTimelineUpdate(updatedTimeline);
+    console.log(`🗑️ Transition removed: ${clipId} (${direction})`);
+  };
+
+  // トランジションのデフォルトパラメータ
+  const getDefaultTransitionParameters = (type: Transition['type']): Record<string, any> => {
+    switch (type) {
+      case 'crossfade':
+        return { curve: 'ease-in-out' };
+      case 'slide':
+        return { direction: 'left', easing: 'ease-out' };
+      case 'wipe':
+        return { direction: 'horizontal', softness: 0.1 };
+      case 'cut':
+        return {};
+      default:
+        return {};
+    }
+  };
+
   // クリップリサイズ開始
   const handleResizeStart = (clipId: string, edge: 'left' | 'right', e: React.MouseEvent) => {
     e.stopPropagation();
@@ -219,6 +323,15 @@ const Timeline: React.FC<TimelineProps> = ({
       if (selectedClipId) {
         e.preventDefault();
         handleClipDelete(selectedClipId);
+      }
+    }
+    // T でトランジション追加
+    else if (e.key === 't' || e.key === 'T') {
+      e.preventDefault();
+      if (selectedClipId) {
+        setIsAddingTransition(true);
+        addTransitionBetweenClips(selectedClipId, 'crossfade');
+        setTimeout(() => setIsAddingTransition(false), 1000);
       }
     }
   };
@@ -410,6 +523,10 @@ const Timeline: React.FC<TimelineProps> = ({
               <span>Split</span>
             </div>
             <div className="flex items-center space-x-1">
+              <kbd className="px-1 bg-dark-700 rounded">T</kbd>
+              <span>Transition</span>
+            </div>
+            <div className="flex items-center space-x-1">
               <kbd className="px-1 bg-dark-700 rounded">Ctrl+C</kbd>
               <span>Copy</span>
             </div>
@@ -466,6 +583,28 @@ const Timeline: React.FC<TimelineProps> = ({
           >
             <Plus className="w-4 h-4" />
             <span>Paste</span>
+          </button>
+          
+          <button 
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              selectedClipId && !isAddingTransition
+                ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+                : isAddingTransition
+                ? 'bg-green-500 text-white' 
+                : 'bg-dark-700 hover:bg-dark-600 text-gray-400 cursor-not-allowed'
+            }`}
+            onClick={() => {
+              if (selectedClipId) {
+                setIsAddingTransition(true);
+                addTransitionBetweenClips(selectedClipId, 'crossfade');
+                setTimeout(() => setIsAddingTransition(false), 1000);
+              }
+            }}
+            disabled={!selectedClipId || isAddingTransition}
+            title="Add transition to next clip (T)"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            <span>{isAddingTransition ? 'Added!' : 'Transition'}</span>
           </button>
         </div>
       </div>
@@ -599,6 +738,18 @@ const Timeline: React.FC<TimelineProps> = ({
                         {/* トリムインジケーター */}
                         {(clip.trimStart > 0 || clip.trimEnd < (clip.trimEnd || clip.duration)) && (
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-orange-400/60" title="Trimmed content" />
+                        )}
+                        
+                        {/* トランジションインジケーター */}
+                        {clip.transitions?.out && (
+                          <div className="absolute -right-2 top-1/2 transform -translate-y-1/2 bg-orange-500 rounded-full p-1 z-20">
+                            <ArrowRightLeft className="w-2 h-2 text-white" />
+                          </div>
+                        )}
+                        {clip.transitions?.in && (
+                          <div className="absolute -left-2 top-1/2 transform -translate-y-1/2 bg-orange-500 rounded-full p-1 z-20">
+                            <ArrowRightLeft className="w-2 h-2 text-white" />
+                          </div>
                         )}
                         
                         {/* 選択インジケーター */}
