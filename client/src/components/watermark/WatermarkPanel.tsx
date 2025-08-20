@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 interface User {
-  plan: 'free' | 'basic' | 'pro' | 'premium';
+  plan: 'free' | 'light' | 'standard' | 'pro';
   canRemoveWatermark: boolean;
 }
 
@@ -96,25 +96,25 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
       features: ['基本編集機能', 'FlickMV透かし付き', '720p出力'],
       color: 'gray'
     },
-    basic: {
-      name: 'ベーシック',
-      price: '¥980/月',
+    light: {
+      name: 'ライト',
+      price: '¥1,480/月',
       watermark: '必須',
-      features: ['高度編集機能', 'FlickMV透かし付き', '1080p出力', '優先サポート'],
+      features: ['高度編集機能', '1080p出力', '優先サポート'],
       color: 'blue'
+    },
+    standard: {
+      name: 'スタンダード',
+      price: '¥2,980/月',
+      watermark: '削除可能',
+      features: ['全機能利用可能', '1080p-4K対応', '優先レンダリング'],
+      color: 'purple'
     },
     pro: {
       name: 'プロ',
-      price: '¥1,980/月',
+      price: '¥5,480/月',
       watermark: '削除可能',
-      features: ['全機能利用可能', '透かし削除可能', '4K出力', 'プレミアムテンプレート'],
-      color: 'purple'
-    },
-    premium: {
-      name: 'プレミアム',
-      price: '¥2,980/月',
-      watermark: '削除可能',
-      features: ['全機能 + AI機能', '透かし削除可能', '無制限出力', '専用サポート'],
+      features: ['全機能 + AI機能', '4K出力', '専用サポート'],
       color: 'gold'
     }
   };
@@ -185,7 +185,7 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
                       className={`p-6 rounded-xl border-2 transition-all ${
                         user.plan === key
                           ? 'border-purple-500 bg-purple-500/10'
-                          : key === 'pro' || key === 'premium'
+                          : key === 'standard' || key === 'pro'
                           ? 'border-purple-400/50 hover:border-purple-400 bg-dark-750'
                           : 'border-dark-600 bg-dark-750'
                       }`}
@@ -212,7 +212,7 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
                           <div className="bg-purple-500/20 text-purple-400 py-2 px-4 rounded-lg text-sm font-medium">
                             現在のプラン
                           </div>
-                        ) : (key === 'pro' || key === 'premium') ? (
+                        ) : (key === 'standard' || key === 'pro') ? (
                           <button
                             onClick={() => handleUpgrade(key)}
                             className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-2 px-4 rounded-lg font-medium transition-all"
@@ -233,8 +233,8 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
                     <div>
                       <h4 className="font-semibold text-purple-400 mb-1">透かしについて</h4>
                       <p className="text-sm text-gray-300">
-                        FlickMVの透かしは、フリープランとベーシックプランで動画に自動追加されます。
-                        プロプラン以上では透かしを完全に削除して、完全にブランドフリーな動画を作成できます。
+                        FlickMVの透かしは、フリーとライトプランで動画に自動追加されます。
+                        スタンダード以上では透かしを完全に削除して、完全にブランドフリーな動画を作成できます。
                       </p>
                     </div>
                   </div>
@@ -257,7 +257,7 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
             <div>
               <h3 className="font-semibold">FlickMV透かし</h3>
               <p className="text-sm text-gray-400">
-                {user.canRemoveWatermark ? '透かしのオン/オフを切り替えできます' : 'プロプラン以上で削除可能'}
+                {user.canRemoveWatermark ? '透かしのオン/オフを切り替えできます' : 'スタンダード以上で削除可能'}
               </p>
             </div>
           </div>
@@ -289,7 +289,7 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
             <div className="flex items-start space-x-2">
               <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5" />
               <div className="text-sm">
-                <p className="text-yellow-400 font-medium">プロプラン以上が必要</p>
+                <p className="text-yellow-400 font-medium">スタンダード以上が必要</p>
                 <p className="text-gray-300">透かしを削除するにはプランのアップグレードが必要です</p>
               </div>
             </div>
@@ -370,13 +370,13 @@ const WatermarkPanel: React.FC<WatermarkPanelProps> = ({
             <h3 className="font-semibold text-blue-400 mb-2">FlickMV透かしについて</h3>
             <div className="text-gray-300 space-y-2 text-sm">
               <p>
-                • FlickMVの透かしは、フリープランとベーシックプランのユーザーに自動的に追加されます
+                • FlickMVの透かしは、フリーとライトプランのユーザーに自動的に追加されます
               </p>
               <p>
                 • 透かしは動画の品質に影響を与えず、エクスポート時に適用されます
               </p>
               <p>
-                • プロプラン以上では透かしを完全に削除して、ブランドフリーな動画を作成できます
+                • スタンダード以上では透かしを完全に削除して、ブランドフリーな動画を作成できます
               </p>
               <p>
                 • 透かしのスタイルは変更可能ですが、「FlickMV」の表記は変更できません

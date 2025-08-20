@@ -433,7 +433,7 @@ export const useTutorialRecommendations = (user?: User | null) => {
     }
 
     // プロプラン以上にはAI機能チュートリアルを推奨
-    if (user.plan === 'pro' || user.plan === 'premium') {
+    if (user.plan === 'pro') {
       const aiTutorials = recommendations.filter(t => t.id.includes('ai'));
       const otherTutorials = recommendations.filter(t => !t.id.includes('ai'));
       recommendations = [...aiTutorials, ...otherTutorials];

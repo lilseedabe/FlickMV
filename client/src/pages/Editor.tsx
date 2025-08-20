@@ -743,7 +743,7 @@ const Editor: React.FC = () => {
                     <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2">
                       <option>1080p (推奨)</option>
                       <option>720p</option>
-                      {user.plan === 'pro' || user.plan === 'premium' ? (
+                      {user.plan === 'pro' ? (
                         <option>4K</option>
                       ) : (
                         <option disabled>4K (プロプラン以上)</option>

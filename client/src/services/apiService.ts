@@ -30,7 +30,7 @@ interface User {
   name: string;
   email: string;
   avatar?: string;
-  plan: 'free' | 'basic' | 'pro' | 'premium';
+  plan: 'free' | 'light' | 'standard' | 'pro';
   subscription: any;
   usage: any;
   preferences: any;
