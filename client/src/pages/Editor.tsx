@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'react-router-dom';
 
 // Components
-import MediaLibrary from '../components/media/MediaLibrary';
+import { MediaLibrary } from '../components/media/MediaLibrary';
 import Timeline from '../components/timeline/Timeline';
+import EnhancedAudioTimeline from '../components/timeline/EnhancedAudioTimeline';
 import PlaybackControls from '../components/editor/PlaybackControls';
 import AudioAnalysis from '../components/AudioAnalysis/AudioAnalysis';
+import EffectPresetsLibrary from '../components/effects/EffectPresetsLibrary';
 import { ExportPanel, ExportProgress } from '../components/export';
 
 // Context
@@ -64,6 +66,8 @@ import {
 
 // Types
 import type { Project, TimelineClip, MediaFile, Resolution, ExportJob } from '../types';
+import type { EffectPreset } from '../utils/effects/effectPresets';
+import { processMediaFile } from '../utils/media/mediaProcessor';
 
 // PopupPreview Manager
 class PreviewWindowManager {
@@ -342,6 +346,7 @@ const Editor: React.FC = () => {
   // Timeline state
   const [timelineHeight, setTimelineHeight] = useState(200);
   const [isResizingTimeline, setIsResizingTimeline] = useState(false);
+  const [showEnhancedAudio, setShowEnhancedAudio] = useState(false);
   
   // Preview state - ポップアウト機能復活
   const [videoResolution, setVideoResolution] = useState<Resolution>('9:16');
@@ -364,6 +369,9 @@ const Editor: React.FC = () => {
       remaining: 3
     }
   });
+
+  // エフェクトプリセット関連
+  const [showEffectPresets, setShowEffectPresets] = useState(false);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -423,6 +431,57 @@ const Editor: React.FC = () => {
     });
     
     audio.src = url;
+  }, []);
+
+  // メディアファイル処理（強化版）
+  const handleMediaUpload = useCallback(async (mediaFiles: MediaFile[]) => {
+    setProject(prev => ({
+      ...prev,
+      mediaLibrary: [...prev.mediaLibrary, ...mediaFiles]
+    }));
+    
+    // 音声ファイルがあれば時間を調整
+    const audioFiles = mediaFiles.filter(file => file.type === 'audio');
+    if (audioFiles.length > 0) {
+      const longestDuration = Math.max(...audioFiles.map(file => file.duration || 0));
+      if (longestDuration > 0) {
+        setProject(prev => ({
+          ...prev,
+          settings: {
+            ...prev.settings,
+            duration: Math.max(Math.ceil(longestDuration), 60)
+          },
+          timeline: {
+            ...prev.timeline,
+            duration: Math.max(Math.ceil(longestDuration), 60)
+          }
+        }));
+        
+        console.log(`🎵 音声ファイルの最長時間（${longestDuration.toFixed(1)}秒）に基づいてプロジェクトの長さを調整しました。`);
+      }
+    }
+  }, []);
+
+  // エフェクトプリセット適用
+  const handleApplyPreset = useCallback((updatedClip: TimelineClip) => {
+    setProject(prev => ({
+      ...prev,
+      timeline: {
+        ...prev.timeline,
+        clips: prev.timeline.clips.map(clip => 
+          clip.id === updatedClip.id ? updatedClip : clip
+        )
+      }
+    }));
+    
+    setSelectedClip(updatedClip);
+    console.log(`✨ エフェクトプリセットを適用: ${updatedClip.id}`);
+  }, []);
+
+  // エフェクトプリセットプレビュー
+  const handlePreviewPreset = useCallback((preset: EffectPreset) => {
+    console.log(`👁️ プリセットプレビュー: ${preset.name}`);
+    // ここで実際のプレビュー処理を実装可能
   }, []);
 
   // Popup preview functions - 復活
@@ -537,7 +596,7 @@ const Editor: React.FC = () => {
   }, [isResizing, isResizingTimeline, handleMouseMove, handleMouseUp]);
 
   // Other handlers
-  const handleMediaUpload = (files: FileList) => {
+  const handleMediaUploadOld = (files: FileList) => {
     const newItems: MediaFile[] = [];
     Array.from(files).forEach((file, idx) => {
       const url = URL.createObjectURL(file);
@@ -864,7 +923,7 @@ const Editor: React.FC = () => {
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
-                          handleMediaUpload(e.target.files);
+                          handleMediaUploadOld(e.target.files);
                           // 連続アップロードで同じファイル選択も発火するように value リセット
                           e.currentTarget.value = '';
                         }
@@ -888,29 +947,13 @@ const Editor: React.FC = () => {
                 )}
 
                 {activePanel === 'effects' && (
-                  <div className="p-4">
-                    <h3 className="text-lg font-semibold mb-4">エフェクト</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { name: 'フェードイン', icon: Eye },
-                        { name: 'フェードアウト', icon: EyeOff },
-                        { name: 'ズーム', icon: Move },
-                        { name: '回転', icon: RotateCw },
-                        { name: 'ぼかし', icon: Sparkles },
-                        { name: 'カット', icon: Scissors }
-                      ].map(effect => {
-                        const Icon = effect.icon;
-                        return (
-                          <button
-                            key={effect.name}
-                            className="bg-dark-700 hover:bg-dark-600 p-3 rounded-lg transition-all text-center"
-                          >
-                            <Icon className="w-6 h-6 mx-auto mb-2 text-purple-400" />
-                            <span className="text-xs">{effect.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="h-full overflow-hidden">
+                    <EffectPresetsLibrary
+                      selectedClip={selectedClip}
+                      onApplyPreset={handleApplyPreset}
+                      onPreviewPreset={handlePreviewPreset}
+                      className="h-full"
+                    />
                   </div>
                 )}
               </div>
@@ -1059,25 +1102,92 @@ const Editor: React.FC = () => {
 
             <div className="p-2 border-b border-dark-700 bg-dark-800">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Video className="w-4 h-4 text-purple-400" />
-                  タイムライン - 高さ調整可能
-                </h3>
+                <div className="flex items-center gap-4">
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <Video className="w-4 h-4 text-purple-400" />
+                    タイムライン - 高さ調整可能
+                  </h3>
+                  <button
+                    onClick={() => setShowEnhancedAudio(!showEnhancedAudio)}
+                    className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-all ${
+                      showEnhancedAudio 
+                        ? 'bg-cyan-500 text-white' 
+                        : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
+                    }`}
+                  >
+                    <Music className="w-3 h-3" />
+                    <span>音声波形</span>
+                  </button>
+                  <button
+                    onClick={() => setShowEffectPresets(!showEffectPresets)}
+                    className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-all ${
+                      showEffectPresets 
+                        ? 'bg-purple-500 text-white' 
+                        : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>エフェクト</span>
+                  </button>
+                </div>
                 <div className="text-xs text-gray-400">
                   高さ: {timelineHeight}px | 長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}
+                  {showEnhancedAudio && ' | 音声波形表示中'}
+                  {showEffectPresets && ' | エフェクト表示中'}
                 </div>
               </div>
             </div>
             
-            <Timeline
-              timeline={project.timeline}
-              playheadPosition={playheadPosition}
-              zoom={zoom}
-              onClipSelect={handleClipSelect}
-              onTimelineUpdate={(timeline) => 
-                setProject(prev => ({ ...prev, timeline }))
-              }
-            />
+            <div className="h-full overflow-hidden">
+              <div className="flex h-full">
+                {/* メインタイムライン */}
+                <div className={`transition-all duration-300 ${
+                  showEnhancedAudio && showEffectPresets ? 'w-1/2' :
+                  showEnhancedAudio || showEffectPresets ? 'w-2/3' : 'w-full'
+                }`}>
+                  <Timeline
+                    timeline={project.timeline}
+                    playheadPosition={playheadPosition}
+                    zoom={zoom}
+                    onClipSelect={handleClipSelect}
+                    onTimelineUpdate={(timeline) => 
+                      setProject(prev => ({ ...prev, timeline }))
+                    }
+                  />
+                </div>
+                
+                {/* Enhanced Audio Timeline */}
+                {showEnhancedAudio && (
+                  <div className={`border-l border-dark-700 transition-all duration-300 ${
+                    showEffectPresets ? 'w-1/4' : 'w-1/3'
+                  }`}>
+                    <EnhancedAudioTimeline
+                      timeline={project.timeline}
+                      onTimelineUpdate={(timeline) => 
+                        setProject(prev => ({ ...prev, timeline }))
+                      }
+                      playheadPosition={playheadPosition}
+                      zoom={zoom}
+                      className="h-full"
+                    />
+                  </div>
+                )}
+                
+                {/* エフェクトプリセット */}
+                {showEffectPresets && (
+                  <div className={`border-l border-dark-700 transition-all duration-300 ${
+                    showEnhancedAudio ? 'w-1/4' : 'w-1/3'
+                  }`}>
+                    <EffectPresetsLibrary
+                      selectedClip={selectedClip}
+                      onApplyPreset={handleApplyPreset}
+                      onPreviewPreset={handlePreviewPreset}
+                      className="h-full"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </motion.div>
         </div>
 

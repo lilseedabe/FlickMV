@@ -32,7 +32,7 @@ router.post('/:projectId',
       });
     }
 
-    // Fetch project (full timeline/settings are needed)
+    // Fetch project with media files (full timeline/settings are needed)
     const projectId = req.params.projectId;
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -40,7 +40,22 @@ router.post('/:projectId',
         id: true,
         name: true,
         settings: true,
-        timeline: true
+        timeline: true,
+        mediaFiles: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            url: true,
+            thumbnail: true,
+            size: true,
+            width: true,
+            height: true,
+            duration: true,
+            format: true,
+            metadata: true
+          }
+        }
       }
     });
 
@@ -97,7 +112,7 @@ router.post('/:projectId',
         metadata: {
           timeline: project.timeline,
           projectSettings: project.settings,
-          mediaFiles: [] // Will be populated by worker if needed
+          mediaFiles: project.mediaFiles || []
         },
         status: 'queued',
         progress: 0

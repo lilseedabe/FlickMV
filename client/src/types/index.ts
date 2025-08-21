@@ -106,12 +106,21 @@ export interface TimelineClip {
 
 export interface AudioTrack {
   id: string;
-  mediaId: string;
+  // メディア管理ID（未連携の場合もあるため任意）
+  mediaId?: string;
+  // 表示/識別用
+  name?: string;
+  url?: string;
+  // タイムライン配置
   startTime: number;
   duration: number;
   volume: number; // 0-1
+  muted?: boolean;
+  // 解析情報
   bpm?: number;
   beats?: number[]; // beat timestamps
+  bars?: number[]; // bar start timestamps
+  analyzedAt?: string;
 }
 
 export interface Timeline {

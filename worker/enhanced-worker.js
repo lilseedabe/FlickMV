@@ -159,7 +159,7 @@ class VideoProcessor {
       message: `Processing clip ${index + 1}/${this.timeline.clips.length}`
     });
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       // Build filter chain for clip effects
       const filters = [];
       
@@ -186,8 +186,8 @@ class VideoProcessor {
         });
       }
 
-      // Create placeholder clip if no media source
-      const videoInput = this.generateClipContent(clip);
+      // Get video input (real media or placeholder)
+      const videoInput = await this.generateClipContent(clip);
       let command = ffmpeg(videoInput);
 
       // Apply trimming
@@ -220,15 +220,110 @@ class VideoProcessor {
   }
 
   /**
-   * Generate content for clip (placeholder implementation)
+   * Generate content for clip (enhanced with real media support)
    */
-  generateClipContent(clip) {
-    // For now, generate a colored video based on clip properties
-    const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
-    const color = colors[Math.abs(clip.id.charCodeAt(0)) % colors.length];
-    const size = this.getResolutionSize();
+  async generateClipContent(clip) {
+    // Check if clip has associated media file
+    if (clip.mediaFile && clip.mediaFile.url) {
+      const mediaPath = await this.resolveMediaPath(clip.mediaFile.url);
+      
+      // Verify file exists
+      try {
+        await fsp.access(mediaPath);
+        log.debug(`Using real media file: ${mediaPath}`);
+        return mediaPath;
+      } catch (error) {
+        log.warn(`Media file not found: ${mediaPath}, falling back to placeholder`);
+      }
+    }
     
-    return `color=c=${color}:s=${size}:d=${clip.duration}`;
+    // Enhanced placeholder generation
+    return this.generatePlaceholderContent(clip);
+  }
+
+  /**
+   * Resolve media file path from URL
+   */
+  async resolveMediaPath(url) {
+    // Handle different URL formats
+    if (url.startsWith('/uploads/') || url.startsWith('uploads/')) {
+      // Local file path
+      const uploadsDir = process.env.UPLOADS_DIR || '/app/uploads';
+      const relativePath = url.replace(/^\/+/, '');
+      return path.join(uploadsDir, relativePath);
+    } else if (url.startsWith('http://') || url.startsWith('https://')) {
+      // Remote URL - download temporarily
+      return await this.downloadTempFile(url);
+    } else if (path.isAbsolute(url)) {
+      // Absolute path
+      return url;
+    } else {
+      // Relative path
+      const uploadsDir = process.env.UPLOADS_DIR || '/app/uploads';
+      return path.join(uploadsDir, url);
+    }
+  }
+
+  /**
+   * Download remote file temporarily
+   */
+  async downloadTempFile(url) {
+    const tempPath = path.join(this.tempDir, `remote_${Date.now()}_${path.basename(url)}`);
+    
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const buffer = await response.arrayBuffer();
+      await fsp.writeFile(tempPath, Buffer.from(buffer));
+      
+      log.debug(`Downloaded remote file: ${url} -> ${tempPath}`);
+      return tempPath;
+    } catch (error) {
+      log.error(`Failed to download ${url}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate enhanced placeholder content
+   */
+  generatePlaceholderContent(clip) {
+    // Enhanced placeholder with more variety
+    const placeholderTypes = [
+      {
+        type: 'gradient',
+        pattern: (size, duration) => `color=c=0x1a1a2e:s=${size}:d=${duration},geq=r='255*sin(2*PI*T/5)':g='255*sin(2*PI*T/3)':b='255*sin(2*PI*T/7)'`
+      },
+      {
+        type: 'noise',
+        pattern: (size, duration) => `color=c=black:s=${size}:d=${duration},noise=alls=20:allf=t+u`
+      },
+      {
+        type: 'solid',
+        pattern: (size, duration, color) => `color=c=${color}:s=${size}:d=${duration}`
+      },
+      {
+        type: 'test_pattern',
+        pattern: (size, duration) => `testsrc2=s=${size}:d=${duration}:r=30`
+      }
+    ];
+    
+    // Select placeholder type based on clip properties
+    const typeIndex = Math.abs(clip.id.charCodeAt(0)) % placeholderTypes.length;
+    const selectedType = placeholderTypes[typeIndex];
+    
+    const size = this.getResolutionSize();
+    const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', '0x6366f1', '0x10b981', '0xf59e0b'];
+    const color = colors[Math.abs(clip.id.charCodeAt(1)) % colors.length];
+    
+    if (selectedType.type === 'solid') {
+      return selectedType.pattern(size, clip.duration, color);
+    } else {
+      return selectedType.pattern(size, clip.duration);
+    }
   }
 
   /**
@@ -258,7 +353,7 @@ class VideoProcessor {
     // In a full implementation, this would process specific transition types
     const outputPath = path.join(this.tempDir, 'with_transitions.mp4');
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       let command = ffmpeg();
 
       // Add all input clips
@@ -326,7 +421,7 @@ class VideoProcessor {
 
     const watermarkFilter = this.generateWatermarkFilter();
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       ffmpeg(inputPath)
         .videoFilters(watermarkFilter)
         .videoCodec('libx264')
@@ -457,6 +552,22 @@ async function main() {
     const timeline = exportJob.metadata?.timeline || { clips: [], audioTracks: [], duration: 10 };
     const settings = exportJob.settings || {};
     const watermarkSettings = exportJob.watermarkSettings || { enabled: true, preset: 'minimal' };
+    const mediaFiles = exportJob.metadata?.mediaFiles || [];
+    
+    // Create media file lookup map
+    const mediaFileMap = new Map();
+    mediaFiles.forEach(file => {
+      mediaFileMap.set(file.id, file);
+    });
+    
+    // Enhance timeline clips with media file information
+    const enhancedTimeline = {
+      ...timeline,
+      clips: timeline.clips.map(clip => ({
+        ...clip,
+        mediaFile: mediaFileMap.get(clip.mediaId) || null
+      }))
+    };
     
     log.info(`Processing timeline with ${timeline.clips.length} clips, duration: ${timeline.duration}s`);
 
@@ -503,7 +614,7 @@ async function main() {
     const outputPath = path.join(tmpDir, filename);
 
     // Process video using enhanced pipeline
-    const processor = new VideoProcessor(timeline, settings, watermarkSettings, reportProgress);
+    const processor = new VideoProcessor(enhancedTimeline, settings, watermarkSettings, reportProgress);
     await processor.process(outputPath);
 
     // Upload and finalize

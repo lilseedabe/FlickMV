@@ -14,36 +14,117 @@ import {
   Trash2,
   Eye,
   Brain,
-  Zap
+  Zap,
+  AlertCircle,
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 import type { MediaFile, MediaType } from '@/types';
+import { processMediaFile, validateFile } from '../../utils/media/mediaProcessor';
 
 interface MediaLibraryProps {
   mediaFiles: MediaFile[];
-  onUpload: (files: FileList) => void;
+  onUpload: (mediaFiles: MediaFile[]) => void;
   onAudioAnalyze?: (file: MediaFile) => void;
 }
 
-const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAudioAnalyze }) => {
+const MediaLibrary: React.FC<MediaLibraryProps> = ({ 
+  mediaFiles, 
+  onUpload, 
+  onAudioAnalyze 
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<MediaType | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [processingFiles, setProcessingFiles] = useState<Map<string, number>>(new Map());
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+
+  // ファイル処理とアップロード
+  const processAndUploadFiles = useCallback(async (files: File[]) => {
+    const newProcessingFiles = new Map(processingFiles);
+    const processedFiles: MediaFile[] = [];
+    const errors: string[] = [];
+    
+    // 各ファイルを処理
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileId = `${file.name}_${file.size}_${Date.now()}`;
+      
+      try {
+        // ファイル検証
+        const validation = validateFile(file);
+        if (!validation.isValid) {
+          errors.push(`${file.name}: ${validation.error}`);
+          continue;
+        }
+        
+        if (validation.warnings) {
+          validation.warnings.forEach(warning => {
+            console.warn(`${file.name}: ${warning}`);
+          });
+        }
+        
+        // 進捗表示開始
+        newProcessingFiles.set(fileId, 0);
+        setProcessingFiles(new Map(newProcessingFiles));
+        
+        // 進捗更新シミュレーション
+        const updateProgress = (progress: number) => {
+          newProcessingFiles.set(fileId, progress);
+          setProcessingFiles(new Map(newProcessingFiles));
+        };
+        
+        updateProgress(20);
+        
+        // メディアファイル処理
+        const mediaFile = await processMediaFile(file);
+        updateProgress(80);
+        
+        processedFiles.push(mediaFile);
+        updateProgress(100);
+        
+        // 完了後に進捗を削除
+        setTimeout(() => {
+          const currentProcessing = new Map(processingFiles);
+          currentProcessing.delete(fileId);
+          setProcessingFiles(currentProcessing);
+        }, 1000);
+        
+      } catch (error) {
+        console.error(`Failed to process ${file.name}:`, error);
+        errors.push(`${file.name}: 処理に失敗しました`);
+        newProcessingFiles.delete(fileId);
+      }
+    }
+    
+    // エラーを表示
+    if (errors.length > 0) {
+      setUploadErrors(errors);
+      setTimeout(() => setUploadErrors([]), 5000);
+    }
+    
+    // 処理済みファイルをコールバック
+    if (processedFiles.length > 0) {
+      onUpload(processedFiles);
+    }
+    
+    setProcessingFiles(new Map());
+  }, [onUpload, processingFiles]);
 
   // File drop handling
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const fileList = new DataTransfer();
-    acceptedFiles.forEach(file => fileList.items.add(file));
-    onUpload(fileList.files);
-  }, [onUpload]);
+    processAndUploadFiles(acceptedFiles);
+  }, [processAndUploadFiles]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp'],
-      'video/*': ['.mp4', '.mov', '.webm'],
-      'audio/*': ['.mp3', '.wav', '.aac']
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
+      'video/*': ['.mp4', '.mov', '.webm', '.avi'],
+      'audio/*': ['.mp3', '.wav', '.aac', '.ogg', '.m4a']
     },
-    multiple: true
+    multiple: true,
+    maxSize: 100 * 1024 * 1024 // 100MB制限
   });
 
   // Filter and search media files
@@ -65,6 +146,21 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatResolution = (width?: number, height?: number) => {
+    if (!width || !height) return '';
+    
+    const resolutionNames: Record<string, string> = {
+      '1920x1080': 'Full HD',
+      '1280x720': 'HD',
+      '3840x2160': '4K',
+      '1080x1920': 'Vertical HD',
+      '1080x1080': 'Square'
+    };
+    
+    const key = `${width}x${height}`;
+    return resolutionNames[key] || `${width}×${height}`;
   };
 
   const getMediaIcon = (type: MediaType) => {
@@ -118,6 +214,61 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
 
       {/* Upload Area */}
       <div className="px-4 mb-4">
+        {/* エラー表示 */}
+        <AnimatePresence>
+          {uploadErrors.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg"
+            >
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+                <span className="text-sm font-medium text-red-400">アップロードエラー</span>
+              </div>
+              <div className="space-y-1">
+                {uploadErrors.map((error, index) => (
+                  <p key={index} className="text-xs text-red-300">{error}</p>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        {/* 進捗表示 */}
+        <AnimatePresence>
+          {processingFiles.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg"
+            >
+              <div className="flex items-center space-x-2 mb-3">
+                <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                <span className="text-sm font-medium text-blue-400">ファイルを処理中...</span>
+              </div>
+              <div className="space-y-2">
+                {Array.from(processingFiles.entries()).map(([fileId, progress]) => (
+                  <div key={fileId}>
+                    <div className="flex justify-between text-xs text-blue-300 mb-1">
+                      <span>{fileId.split('_')[0]}</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="w-full bg-dark-700 rounded-full h-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200 ${
@@ -132,7 +283,10 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
             {isDragActive ? 'Drop files here' : 'Drag & drop files'}
           </p>
           <p className="text-xs text-dark-500">
-            or click to browse
+            or click to browse • Max 100MB per file
+          </p>
+          <p className="text-xs text-dark-500 mt-1">
+            Supports: JPG, PNG, MP4, WebM, MP3, WAV
           </p>
         </div>
       </div>
@@ -174,16 +328,30 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
                 >
                   {/* Thumbnail */}
                   <div className="relative aspect-square bg-dark-600">
-                    {file.type === 'image' && (
+                    {file.type === 'image' && file.thumbnail && (
                       <img
-                        src={file.thumbnail || file.url}
+                        src={file.thumbnail}
                         alt={file.name}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // サムネイル読み込み失敗時はアイコンに切り替え
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     )}
                     {file.type === 'video' && (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Video className="w-8 h-8 text-dark-400" />
+                      <div className="w-full h-full relative">
+                        {file.thumbnail ? (
+                          <img
+                            src={file.thumbnail}
+                            alt={file.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Video className="w-8 h-8 text-dark-400" />
+                          </div>
+                        )}
                       </div>
                     )}
                     {file.type === 'audio' && (
@@ -220,6 +388,13 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
                     <div className="absolute top-2 left-2 p-1 bg-black/50 rounded">
                       {getMediaIcon(file.type)}
                     </div>
+                    
+                    {/* Resolution indicator */}
+                    {(file.width && file.height) && (
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/70 rounded text-xs">
+                        {formatResolution(file.width, file.height)}
+                      </div>
+                    )}
 
                     {/* Duration (for video/audio) */}
                     {file.duration && (
@@ -235,9 +410,16 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
                       {file.name}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-dark-400">
-                        {formatFileSize(file.size)}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-dark-400">
+                          {formatFileSize(file.size)}
+                        </span>
+                        {(file.width && file.height) && (
+                          <span className="text-xs text-dark-500">
+                            {formatResolution(file.width, file.height)}
+                          </span>
+                        )}
+                      </div>
                       <button className="p-1 hover:bg-dark-600 rounded opacity-0 group-hover:opacity-100 transition-all">
                         <MoreVertical className="w-3 h-3 text-dark-400" />
                       </button>
@@ -280,6 +462,12 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
                           <span>{formatDuration(file.duration)}</span>
                         </>
                       )}
+                      {(file.width && file.height) && (
+                        <>
+                          <span>•</span>
+                          <span>{formatResolution(file.width, file.height)}</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -316,4 +504,5 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({ mediaFiles, onUpload, onAud
   );
 };
 
+export { MediaLibrary };
 export default MediaLibrary;

@@ -14,9 +14,12 @@ import {
   Music,
   Plus,
   ArrowRightLeft,
-  Shuffle
+  Shuffle,
+  Volume,
+  Activity
 } from 'lucide-react';
 import type { Timeline as TimelineType, TimelineClip, AudioTrack, Transition } from '@/types';
+import WaveformDisplay from '../waveform/WaveformDisplay';
 
 interface TimelineProps {
   timeline: TimelineType;
@@ -783,9 +786,9 @@ const Timeline: React.FC<TimelineProps> = ({
               >
                 <div className="absolute inset-0 bg-dark-850" />
                 
-                {/* Audio Waveform Clip */}
+                {/* Audio Waveform Display */}
                 <div
-                  className="absolute timeline-audio"
+                  className="absolute"
                   style={{
                     left: timeToPixel(audioTrack.startTime),
                     width: timeToPixel(audioTrack.duration),
@@ -793,21 +796,39 @@ const Timeline: React.FC<TimelineProps> = ({
                     top: 4
                   }}
                 >
-                  <div className="flex items-center h-full px-2">
-                    <Music className="w-3 h-3 mr-1" />
-                    <span className="text-xs truncate">
-                      Audio Track
-                    </span>
-                    {audioTrack.bpm && (
-                      <span className="ml-auto text-xs opacity-70">
-                        {audioTrack.bpm} BPM
+                  {audioTrack.url ? (
+                    <WaveformDisplay
+                      audioTrack={audioTrack}
+                      width={timeToPixel(audioTrack.duration)}
+                      height={audioTrackHeight - 8}
+                      startTime={audioTrack.startTime}
+                      duration={audioTrack.duration}
+                      zoom={zoom}
+                      color="#06b6d4"
+                      showBeats={true}
+                      className="rounded border border-cyan-500/30 bg-cyan-500/10"
+                      onWaveformClick={(time) => {
+                        // プレイヘッドを波形クリック位置に移動する処理
+                        console.log('Waveform clicked at time:', time);
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center h-full px-2 bg-cyan-500/10 border border-cyan-500/30 rounded">
+                      <Activity className="w-3 h-3 mr-1 text-cyan-400" />
+                      <span className="text-xs truncate text-cyan-300">
+                        {audioTrack.name || 'Audio Track'}
                       </span>
-                    )}
-                  </div>
+                      {audioTrack.bpm && (
+                        <span className="ml-auto text-xs text-cyan-400">
+                          {audioTrack.bpm} BPM
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Beat Markers */}
-                {audioTrack.beats && audioTrack.beats.map((beatTime, beatIndex) => (
+                {/* Beat Markers (if no waveform URL) */}
+                {!audioTrack.url && audioTrack.beats && audioTrack.beats.map((beatTime, beatIndex) => (
                   <div
                     key={beatIndex}
                     className="absolute w-px h-full bg-secondary-400 opacity-30"
