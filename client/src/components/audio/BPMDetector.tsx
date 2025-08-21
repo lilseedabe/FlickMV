@@ -51,8 +51,11 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
       setProgress(20);
 
       // 音声ファイルをAudioBufferに変換
-      // 注意: 実運用では URL から fetch して ArrayBuffer -> AudioBuffer へ変換する
-      const buffer = await loadAudioFile(new File([], audioFile.name));
+      // audioFile.urlから実際のファイルを取得
+      const response = await fetch(audioFile.url);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const buffer = await audioContext.decodeAudioData(arrayBuffer);
       setAudioBuffer(buffer);
       setProgress(40);
 

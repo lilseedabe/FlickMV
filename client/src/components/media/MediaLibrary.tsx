@@ -10,6 +10,7 @@ import {
   Filter,
   MoreVertical,
   Play,
+  Pause,
   Download,
   Trash2,
   Eye,
@@ -32,6 +33,10 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [processingFiles, setProcessingFiles] = useState<Map<string, number>>(new Map());
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  
+  // 音楽再生の状態管理
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null);
+  const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
 
   // ファイル処理とアップロード
   const processAndUploadFiles = useCallback(async (files: File[]) => {
@@ -169,6 +174,62 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
         return <Image className="w-4 h-4" />;
     }
   };
+
+  // 音楽再生機能
+  const playAudio = useCallback((file: MediaFile) => {
+    if (!file.url || file.type !== 'audio') return;
+    
+    // 現在再生中の音楽がある場合は停止
+    if (audioRef) {
+      audioRef.pause();
+      audioRef.currentTime = 0;
+    }
+    
+    // 同じファイルを再度クリックした場合は停止
+    if (currentlyPlaying === file.id) {
+      setCurrentlyPlaying(null);
+      setAudioRef(null);
+      return;
+    }
+    
+    // 新しい音楽を再生
+    const audio = new Audio(file.url);
+    
+    audio.addEventListener('loadeddata', () => {
+      console.log(`🎵 音楽再生開始: ${file.name}`);
+    });
+    
+    audio.addEventListener('ended', () => {
+      setCurrentlyPlaying(null);
+      setAudioRef(null);
+      console.log(`✅ 音楽再生終了: ${file.name}`);
+    });
+    
+    audio.addEventListener('error', (e) => {
+      console.error(`❌ 音楽再生エラー: ${file.name}`, e);
+      setCurrentlyPlaying(null);
+      setAudioRef(null);
+      alert('音楽ファイルの再生に失敗しました。');
+    });
+    
+    audio.play().then(() => {
+      setCurrentlyPlaying(file.id);
+      setAudioRef(audio);
+    }).catch((error) => {
+      console.error('Audio playback failed:', error);
+      alert('音楽ファイルの再生に失敗しました。ブラウザの自動再生設定を確認してください。');
+    });
+  }, [currentlyPlaying, audioRef]);
+  
+  // コンポーネントのアンマウント時に音楽を停止
+  React.useEffect(() => {
+    return () => {
+      if (audioRef) {
+        audioRef.pause();
+        audioRef.currentTime = 0;
+      }
+    };
+  }, [audioRef]);
 
   return (
     <div className="h-full flex flex-col">
@@ -357,8 +418,28 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
                     {/* Overlay */}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="flex space-x-2">
-                        <button className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
-                          <Play className="w-3 h-3" />
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (file.type === 'audio') {
+                              playAudio(file);
+                            }
+                          }}
+                          className={`p-1.5 rounded-full transition-colors ${
+                            file.type === 'audio' && currentlyPlaying === file.id 
+                              ? 'bg-green-500/80 hover:bg-green-600/80' 
+                              : 'bg-white/20 hover:bg-white/30'
+                          }`}
+                          title={file.type === 'audio' ? 
+                            (currentlyPlaying === file.id ? '音楽を停止' : '音楽を再生') : 
+                            'プレビュー'
+                          }
+                        >
+                          {file.type === 'audio' && currentlyPlaying === file.id ? (
+                            <Pause className="w-3 h-3" />
+                          ) : (
+                            <Play className="w-3 h-3" />
+                          )}
                         </button>
                         <button className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
                           <Eye className="w-3 h-3" />
@@ -466,8 +547,28 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
                   </div>
 
                   <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-1.5 hover:bg-dark-500 rounded">
-                      <Play className="w-3 h-3" />
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (file.type === 'audio') {
+                          playAudio(file);
+                        }
+                      }}
+                      className={`p-1.5 rounded transition-colors ${
+                        file.type === 'audio' && currentlyPlaying === file.id
+                          ? 'bg-green-500 text-white'
+                          : 'hover:bg-dark-500'
+                      }`}
+                      title={file.type === 'audio' ? 
+                        (currentlyPlaying === file.id ? '音楽を停止' : '音楽を再生') : 
+                        'プレビュー'
+                      }
+                    >
+                      {file.type === 'audio' && currentlyPlaying === file.id ? (
+                        <Pause className="w-3 h-3" />
+                      ) : (
+                        <Play className="w-3 h-3" />
+                      )}
                     </button>
                     {file.type === 'audio' && onAudioAnalyze && (
                       <button 

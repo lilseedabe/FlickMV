@@ -200,7 +200,7 @@ const EffectPresetsLibrary: React.FC<EffectPresetsLibraryProps> = ({
       </div>
 
       {/* プリセット一覧 */}
-      <div className="p-4">
+      <div className="p-4 flex-1 overflow-y-auto max-h-96">
         {filteredPresets.length === 0 ? (
           <div className="text-center py-8">
             <Filter className="w-12 h-12 text-gray-500 mx-auto mb-3" />
