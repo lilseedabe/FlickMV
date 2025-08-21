@@ -65,6 +65,8 @@ export interface MediaFile {
     frameRate?: number;
     [key: string]: any;
   };
+  // 元のFileオブジェクトを保持（BPM検出などで使用）
+  originalFile?: File;
 }
 
 // ===== PROJECT & TIMELINE TYPES =====
@@ -122,6 +124,8 @@ export interface AudioTrack {
   bars?: number[]; // bar start timestamps
   confidence?: number; // BPM検出の信頼度 (0-1)
   analyzedAt?: string;
+  // 元のFileオブジェクト（BPM検出・波形生成で使用）
+  originalFile?: File;
 }
 
 export interface Timeline {
@@ -317,7 +321,6 @@ export interface PaginatedResponse<T> {
 export interface MediaLibraryProps {
   mediaFiles: MediaFile[];
   onUpload: (mediaFiles: MediaFile[]) => void;
-  onAudioAnalyze?: (file: MediaFile) => void;
   onSelect?: (mediaFile: MediaFile) => void;
   onDelete?: (mediaId: string) => void;
 }

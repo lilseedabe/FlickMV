@@ -52,9 +52,23 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
       // 進行状況の更新（UI向け）
       setProgress(10);
 
-      // 音声ファイルをAudioBufferに変換
-      const response = await fetch(audioFile.url);
-      const arrayBuffer = await response.arrayBuffer();
+      // 音声ファイルをAudioBufferに変換（改良版）
+      let arrayBuffer: ArrayBuffer;
+      
+      if (audioFile.originalFile) {
+        // 原始Fileオブジェクトがある場合は直接使用
+        console.log('📁 原始Fileオブジェクトを使用してBPM検出');
+        arrayBuffer = await audioFile.originalFile.arrayBuffer();
+      } else {
+        // フォールバック: Blob URLを使用
+        console.log('🌐 Blob URLを使用してBPM検出');
+        const response = await fetch(audioFile.url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        arrayBuffer = await response.arrayBuffer();
+      }
+      
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
       setAudioBuffer(buffer);
@@ -92,9 +106,9 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
     }
   }, [audioFile, onBPMDetected, onAnalysisStart, onAnalysisComplete, onError]);
 
-  // 音声プレビュー再生
+  // 音声プレビュー再生 - 改良版
   const togglePlayback = useCallback(async () => {
-    if (!audioBuffer) return;
+    if (!audioBuffer && !audioFile.originalFile) return;
 
     try {
       if (isPlaying) {
@@ -102,10 +116,23 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
         audioContext?.suspend();
         setIsPlaying(false);
       } else {
-        // 再生
+        // 再生（原始Fileオブジェクトを使用）
         const ctx = new AudioContext();
+        
+        let currentAudioBuffer = audioBuffer;
+        if (!currentAudioBuffer && audioFile.originalFile) {
+          // AudioBufferがない場合は新しく作成
+          console.log('📁 再生用にAudioBufferを作成');
+          const arrayBuffer = await audioFile.originalFile.arrayBuffer();
+          currentAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        }
+        
+        if (!currentAudioBuffer) {
+          throw new Error('音声バッファの作成に失敗しました');
+        }
+        
         const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
+        source.buffer = currentAudioBuffer;
         source.connect(ctx.destination);
         source.start();
 
@@ -119,8 +146,9 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
       }
     } catch (err) {
       console.error('音声再生エラー:', err);
+      alert('音声ファイルの再生に失敗しました。ファイル形式をご確認ください。');
     }
-  }, [audioBuffer, audioContext, isPlaying]);
+  }, [audioBuffer, audioContext, isPlaying, audioFile.originalFile]);
 
   // 信頼度に基づくアドバイス
   const getConfidenceMessage = (confidence: number) => {

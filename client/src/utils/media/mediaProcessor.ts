@@ -198,11 +198,11 @@ export class MediaProcessor {
   }
 
   /**
-   * MediaFileオブジェクトを作成
+   * MediaFileオブジェクトを作成 - 原始Fileオブジェクトも保持
    */
   async createMediaFile(file: File): Promise<MediaFile> {
     const metadata = await this.extractMediaMetadata(file);
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(file); // Blob URLを作成（削除しない）
     const type = this.getMediaType(metadata.mimeType);
     
     return {
@@ -217,6 +217,7 @@ export class MediaProcessor {
       duration: metadata.duration,
       format: metadata.format,
       uploadedAt: new Date(),
+      originalFile: file, // 原始Fileオブジェクトを保持
       metadata: {
         mimeType: metadata.mimeType,
         originalName: file.name,

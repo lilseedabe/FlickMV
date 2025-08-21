@@ -127,7 +127,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
               bpm: analysis.bpm,
               beats: analysis.beatTimes,
               bars: analysis.bars,
-              confidence: analysis.confidence
+              confidence: analysis.confidence,
+              originalFile: selectedAudioFile.originalFile // originalFileも更新
             }
           : track
       );
@@ -144,7 +145,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
         bpm: analysis.bpm,
         beats: analysis.beatTimes,
         bars: analysis.bars,
-        confidence: analysis.confidence
+        confidence: analysis.confidence,
+        originalFile: selectedAudioFile.originalFile // originalFileを含める
       };
       updatedAudioTracks = [...audioTracks, newTrack];
     }
@@ -156,6 +158,12 @@ const RightPanel: React.FC<RightPanelProps> = ({
         audioTracks: updatedAudioTracks
       }
     });
+
+    // selectedAudioTrackも更新
+    const updatedTrack = updatedAudioTracks.find(track => track.name === selectedAudioFile.name);
+    if (updatedTrack) {
+      setSelectedAudioTrack(updatedTrack);
+    }
 
     console.log('✅ BPM検出結果をプロジェクトに反映:', analysis);
   }, [selectedAudioFile, audioTracks, project, onProjectUpdate]);
@@ -417,7 +425,10 @@ const RightPanel: React.FC<RightPanelProps> = ({
                   </h4>
                   <div className="bg-dark-800 rounded-lg p-3">
                     <WaveformDisplay
-                      audioTrack={selectedAudioTrack}
+                      audioTrack={{
+                        ...selectedAudioTrack,
+                        originalFile: selectedAudioTrack.originalFile || selectedAudioFile?.originalFile
+                      }}
                       width={240}
                       height={80}
                       startTime={0}

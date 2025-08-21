@@ -14,7 +14,6 @@ import {
   Download,
   Trash2,
   Eye,
-  Brain,
   Zap,
   AlertCircle,
   CheckCircle,
@@ -25,8 +24,7 @@ import { processMediaFile, validateFile } from '../../utils/media/mediaProcessor
 
 const MediaLibrary: React.FC<MediaLibraryProps> = ({ 
   mediaFiles, 
-  onUpload, 
-  onAudioAnalyze 
+  onUpload
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<MediaType | 'all'>('all');
@@ -459,18 +457,6 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
                         <button className="p-1.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
                           <Eye className="w-3 h-3" />
                         </button>
-                        {file.type === 'audio' && onAudioAnalyze && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAudioAnalyze(file);
-                            }}
-                            className="p-1.5 bg-purple-500/80 rounded-full hover:bg-purple-600/80 transition-colors"
-                            title="音声解析・MVプロンプト生成"
-                          >
-                            <Brain className="w-3 h-3" />
-                          </button>
-                        )}
                       </div>
                     </div>
 
@@ -585,18 +571,6 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
                         <Play className="w-3 h-3" />
                       )}
                     </button>
-                    {file.type === 'audio' && onAudioAnalyze && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAudioAnalyze(file);
-                        }}
-                        className="p-1.5 hover:bg-purple-500 rounded text-purple-400"
-                        title="音声解析・MVプロンプト生成"
-                      >
-                        <Brain className="w-3 h-3" />
-                      </button>
-                    )}
                     <button className="p-1.5 hover:bg-dark-500 rounded">
                       <Download className="w-3 h-3" />
                     </button>

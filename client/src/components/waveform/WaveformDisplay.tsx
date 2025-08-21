@@ -38,15 +38,27 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 波形データを生成
+  // 波形データを生成 - 改良版
   const generateWaveformData = useCallback(async (audioUrl: string): Promise<WaveformData | null> => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // 音声ファイルを読み込み
-      const response = await fetch(audioUrl);
-      const arrayBuffer = await response.arrayBuffer();
+      let arrayBuffer: ArrayBuffer;
+      
+      // AudioTrackにoriginalFileがあるかチェック
+      if (audioTrack.originalFile) {
+        console.log('📁 波形生成: 原始Fileオブジェクトを使用');
+        arrayBuffer = await audioTrack.originalFile.arrayBuffer();
+      } else {
+        // フォールバック: URLを使用
+        console.log('🌐 波形生成: URLを使用');
+        const response = await fetch(audioUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        arrayBuffer = await response.arrayBuffer();
+      }
       
       // AudioContextで音声データをデコード
       const audioContext = new AudioContext();
@@ -85,7 +97,7 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [width]);
+  }, [width, audioTrack]);
 
   // 音声ファイルが変更された時に波形データを生成
   useEffect(() => {
