@@ -19,14 +19,8 @@ import {
   CheckCircle,
   Loader2
 } from 'lucide-react';
-import type { MediaFile, MediaType } from '@/types';
+import type { MediaFile, MediaType, MediaLibraryProps } from '@/types';
 import { processMediaFile, validateFile } from '../../utils/media/mediaProcessor';
-
-interface MediaLibraryProps {
-  mediaFiles: MediaFile[];
-  onUpload: (mediaFiles: MediaFile[]) => void;
-  onAudioAnalyze?: (file: MediaFile) => void;
-}
 
 const MediaLibrary: React.FC<MediaLibraryProps> = ({ 
   mediaFiles, 
