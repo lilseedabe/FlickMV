@@ -315,7 +315,8 @@ export interface PaginatedResponse<T> {
 // ===== COMPONENT PROP TYPES =====
 export interface MediaLibraryProps {
   mediaFiles: MediaFile[];
-  onUpload: (files: FileList) => void;
+  onUpload: (mediaFiles: MediaFile[]) => void;
+  onAudioAnalyze?: (file: MediaFile) => void;
   onSelect?: (mediaFile: MediaFile) => void;
   onDelete?: (mediaId: string) => void;
 }
