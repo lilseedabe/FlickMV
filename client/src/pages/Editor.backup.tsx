@@ -493,8 +493,12 @@ const Editor: React.FC = () => {
   }, [isResizing, isResizingTimeline, handleMouseMove, handleMouseUp]);
 
   // Other handlers
-  const handleMediaUpload = (files: FileList) => {
-    console.log('Uploading files:', files);
+  const handleMediaUpload = (mediaFiles: MediaFile[]) => {
+    console.log('Uploaded media:', mediaFiles);
+    setProject(prev => ({
+      ...prev,
+      mediaLibrary: [...prev.mediaLibrary, ...mediaFiles]
+    }));
   };
 
   const handleClipSelect = (clip: TimelineClip) => {
