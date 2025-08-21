@@ -1,8 +1,8 @@
 import { BPMAnalysis, AudioAnalysis, FrequencyBand, FREQUENCY_BANDS } from '../../types';
 
 /**
- * 改良版BPM検出とオーディオ解析のユーティリティクラス
- * より高精度なアルゴリズムを使用して信頼性を大幅に向上
+ * 軽量版BPM検出クラス - ブラウザ環境向けに最適化
+ * 実用的な精度と高速処理のバランスを重視
  */
 export class BPMDetector {
   private audioContext: AudioContext;
@@ -14,49 +14,55 @@ export class BPMDetector {
     // Web Audio APIの初期化
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 2048; // 解析の精度を設定
+    this.analyser.fftSize = 1024; // 軽量化のため小さいサイズに
     this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
     this.sampleRate = this.audioContext.sampleRate;
   }
 
   /**
-   * 改良版BPM検出 - 複数アルゴリズムの組み合わせで高精度を実現
+   * 軽量版BPM検出 - 高速で実用的
    * @param audioBuffer - Web Audio APIのAudioBuffer
    * @returns BPM解析結果
    */
   async detectBPM(audioBuffer: AudioBuffer): Promise<BPMAnalysis> {
     try {
-      console.log('🎵 改良版BPM検出を開始します...');
+      console.log('🎵 軽量版BPM検出を開始します');
       
-      // オーディオデータの取得
-      const channelData = audioBuffer.getChannelData(0); // モノラルまたは左チャンネル
+      // オーディオデータの取得（軽量化）
+      const channelData = audioBuffer.getChannelData(0);
       const duration = audioBuffer.duration;
       
-      // ステップ1: オンセット検出（音の開始点を検出）
-      const onsets = this.detectOnsets(channelData, this.sampleRate);
-      console.log(`🎯 オンセット検出: ${onsets.length}個`);
+      console.log(`📊 音声データ: ${duration.toFixed(1)}秒, ${channelData.length}サンプル`);
       
-      // ステップ2: 複数手法でのBPM候補算出
-      const bpmCandidates = this.calculateBPMCandidates(onsets, duration);
-      console.log(`🎶 BPM候補: ${bpmCandidates.map(c => c.bpm).join(', ')}`);
+      // ステップ1: 高速ビート検出（エネルギーベース）
+      const beats = this.detectBeatsLightweight(channelData, this.sampleRate);
+      console.log(`🥁 ビート検出: ${beats.length}個`);
       
-      // ステップ3: 最適なBPMを選択
-      const bestBpm = this.selectBestBPM(bpmCandidates, onsets);
-      console.log(`✨ 選択されたBPM: ${bestBpm.bpm} (信頼度: ${(bestBpm.confidence * 100).toFixed(1)}%)`);
+      // ステップ2: BPM計算（シンプルな統計手法）
+      const bpm = this.calculateBPMFast(beats, duration);
+      console.log(`🎶 BPM算出: ${bpm}`);
       
-      // ステップ4: ビートトラッキング
-      const beats = this.trackBeats(onsets, bestBpm.bpm, duration);
-      const bars = this.calculateBars(beats, bestBpm.bpm);
+      // ステップ3: 信頼度計算（軽量版）
+      const confidence = this.calculateConfidenceFast(beats, bpm);
+      console.log(`✨ 信頼度: ${(confidence * 100).toFixed(1)}%`);
       
-      console.log(`✅ BPM検出完了: ${bestBpm.bpm} BPM (信頼度: ${(bestBpm.confidence * 100).toFixed(1)}%)`);
+      // ステップ4: 小節計算
+      const bars = this.calculateBarsSimple(beats, bpm);
       
-      return {
-        bpm: Math.round(bestBpm.bpm),
-        confidence: bestBpm.confidence,
+      const result: BPMAnalysis = {
+        bpm: Math.round(bpm),
+        confidence: confidence,
         beatTimes: beats,
         bars: bars,
-        timeSignature: this.detectTimeSignature(beats, bestBpm.bpm)
+        timeSignature: {
+          numerator: 4,
+          denominator: 4
+        }
       };
+      
+      console.log(`✅ 軽量版BPM検出完了: ${result.bpm} BPM (信頼度: ${(confidence * 100).toFixed(1)}%)`);
+      
+      return result;
     } catch (error) {
       console.error('❌ BPM検出エラー:', error);
       throw error;
@@ -64,386 +70,145 @@ export class BPMDetector {
   }
 
   /**
-   * 改良版オンセット検出 - スペクトラル差分法を使用
-   * @param channelData - オーディオの波形データ
+   * 軽量版ビート検出 - エネルギーベース
+   * @param channelData - 音声データ
    * @param sampleRate - サンプリングレート
-   * @returns オンセットのタイムスタンプ配列
+   * @returns ビートタイムスタンプ配列
    */
-  private detectOnsets(channelData: Float32Array, sampleRate: number): number[] {
-    const onsets: number[] = [];
-    const hopSize = 512;
-    const windowSize = 1024;
+  private detectBeatsLightweight(channelData: Float32Array, sampleRate: number): number[] {
+    const beats: number[] = [];
+    const windowSize = 2048; // 軽量化
+    const hopSize = 1024;
+    const threshold = 0.7; // 適度な閾値
     
-    // スペクトラム解析用の配列
-    const prevSpectrum: number[] = [];
-    const currentSpectrum: number[] = [];
+    console.log('📈 エネルギーベースビート検出を開始');
     
+    // エネルギー計算（ダウンサンプリング）
+    const energies: number[] = [];
     for (let i = 0; i < channelData.length - windowSize; i += hopSize) {
-      const window = channelData.slice(i, i + windowSize);
-      
-      // ハニング窓を適用
-      const windowedData = this.applyHanningWindow(window);
-      
-      // FFTでスペクトラムを計算
-      const spectrum = this.computeSpectrum(windowedData);
-      
-      if (prevSpectrum.length === spectrum.length) {
-        // スペクトラル差分を計算
-        const spectralDiff = this.calculateSpectralDifference(prevSpectrum, spectrum);
-        
-        // 動的閾値による検出
-        const threshold = this.calculateAdaptiveThreshold(spectralDiff, i / hopSize);
-        
-        if (spectralDiff > threshold) {
-          const timeStamp = i / sampleRate;
-          onsets.push(timeStamp);
-        }
+      let energy = 0;
+      for (let j = i; j < i + windowSize && j < channelData.length; j++) {
+        energy += channelData[j] * channelData[j];
       }
+      energies.push(energy / windowSize);
+    }
+    
+    // 適応的閾値でピーク検出
+    const windowLength = Math.min(20, energies.length); // 適応ウィンドウ
+    
+    for (let i = windowLength; i < energies.length - windowLength; i++) {
+      const current = energies[i];
       
-      // 前フレームのスペクトラムを更新
-      prevSpectrum.splice(0, prevSpectrum.length, ...spectrum);
+      // ローカル平均計算
+      let localAvg = 0;
+      for (let j = i - windowLength; j < i + windowLength; j++) {
+        localAvg += energies[j];
+      }
+      localAvg /= (windowLength * 2);
+      
+      // ピーク検出
+      const isLocalMax = current > energies[i - 1] && current > energies[i + 1];
+      const isAboveThreshold = current > localAvg * threshold;
+      
+      if (isLocalMax && isAboveThreshold) {
+        const timeStamp = (i * hopSize) / sampleRate;
+        beats.push(timeStamp);
+      }
     }
     
-    // ピークピッキング（近接したオンセットを統合）
-    return this.peakPicking(onsets, 0.05); // 50ms以内のオンセットを統合
+    // 近接ビートの統合（最小間隔: 0.1秒）
+    return this.mergeCloseBeats(beats, 0.1);
   }
 
   /**
-   * 複数手法によるBPM候補の算出
-   * @param onsets - オンセットのタイムスタンプ配列
-   * @param duration - 楽曲の総時間
-   * @returns BPM候補配列
+   * 高速BPM計算
+   * @param beats - ビート配列
+   * @param duration - 楽曲長
+   * @returns BPM値
    */
-  private calculateBPMCandidates(onsets: number[], duration: number): Array<{bpm: number, confidence: number}> {
-    const candidates: Array<{bpm: number, confidence: number}> = [];
-    
-    if (onsets.length < 4) {
-      return [{ bpm: 120, confidence: 0.1 }]; // デフォルト値
+  private calculateBPMFast(beats: number[], duration: number): number {
+    if (beats.length < 4) {
+      return 120; // デフォルト値
     }
     
-    // 手法1: インターバル・ヒストグラム法
-    const histogramBpm = this.intervalHistogramMethod(onsets);
-    candidates.push(histogramBpm);
-    
-    // 手法2: 自己相関法
-    const autocorrelationBpm = this.autocorrelationMethod(onsets, duration);
-    candidates.push(autocorrelationBpm);
-    
-    // 手法3: フーリエ変換法
-    const fftBpm = this.fftTempoMethod(onsets, duration);
-    candidates.push(fftBpm);
-    
-    return candidates.sort((a, b) => b.confidence - a.confidence);
-  }
-
-  /**
-   * インターバル・ヒストグラム法によるBPM推定
-   * @param onsets - オンセット配列
-   * @returns BPM候補
-   */
-  private intervalHistogramMethod(onsets: number[]): {bpm: number, confidence: number} {
+    // 間隔計算
     const intervals: number[] = [];
-    
-    // オンセット間隔を計算
-    for (let i = 1; i < onsets.length; i++) {
-      const interval = onsets[i] - onsets[i - 1];
-      if (interval > 0.2 && interval < 2.0) { // 30-300 BPMの範囲
+    for (let i = 1; i < beats.length; i++) {
+      const interval = beats[i] - beats[i - 1];
+      if (interval > 0.3 && interval < 2.0) { // 30-200 BPMの範囲
         intervals.push(interval);
       }
     }
     
     if (intervals.length === 0) {
-      return { bpm: 120, confidence: 0.1 };
+      return 120;
     }
     
-    // ヒストグラムを作成
-    const histogram = new Map<number, number>();
-    const binSize = 0.01; // 10ms
+    // 中央値を使用（外れ値に強い）
+    intervals.sort((a, b) => a - b);
+    const medianInterval = intervals[Math.floor(intervals.length / 2)];
     
-    intervals.forEach(interval => {
-      const bin = Math.round(interval / binSize) * binSize;
-      histogram.set(bin, (histogram.get(bin) || 0) + 1);
-    });
+    // BPMに変換
+    let bpm = 60 / medianInterval;
     
-    // 最頻値を見つける
-    let maxCount = 0;
-    let bestInterval = 0.5;
+    // 一般的な範囲に正規化
+    while (bpm < 70) bpm *= 2;
+    while (bpm > 180) bpm /= 2;
     
-    histogram.forEach((count, interval) => {
-      if (count > maxCount) {
-        maxCount = count;
-        bestInterval = interval;
-      }
-    });
-    
-    const bpm = 60 / bestInterval;
-    const confidence = maxCount / intervals.length;
-    
-    return { bpm, confidence };
+    return bpm;
   }
 
   /**
-   * 自己相関法によるBPM推定
-   * @param onsets - オンセット配列
-   * @param duration - 楽曲時間
-   * @returns BPM候補
+   * 高速信頼度計算
+   * @param beats - ビート配列
+   * @param bpm - 検出BPM
+   * @returns 信頼度 (0-1)
    */
-  private autocorrelationMethod(onsets: number[], duration: number): {bpm: number, confidence: number} {
-    const maxLag = Math.min(duration, 4.0); // 最大4秒のラグ
-    const lagResolution = 0.01; // 10ms分解能
-    const maxLagSamples = Math.floor(maxLag / lagResolution);
-    
-    // オンセット密度関数を作成
-    const densityFunction = new Array(Math.floor(duration / lagResolution)).fill(0);
-    
-    onsets.forEach(onset => {
-      const index = Math.floor(onset / lagResolution);
-      if (index < densityFunction.length) {
-        densityFunction[index] = 1;
-      }
-    });
-    
-    // 自己相関を計算
-    const autocorrelation: number[] = [];
-    
-    for (let lag = 1; lag <= maxLagSamples; lag++) {
-      let correlation = 0;
-      let count = 0;
-      
-      for (let i = 0; i < densityFunction.length - lag; i++) {
-        correlation += densityFunction[i] * densityFunction[i + lag];
-        count++;
-      }
-      
-      autocorrelation.push(count > 0 ? correlation / count : 0);
+  private calculateConfidenceFast(beats: number[], bpm: number): number {
+    if (beats.length < 4) {
+      return 0.3;
     }
-    
-    // ピークを検出
-    let maxCorrelation = 0;
-    let bestLag = 0;
-    
-    for (let i = 1; i < autocorrelation.length - 1; i++) {
-      if (autocorrelation[i] > autocorrelation[i - 1] && 
-          autocorrelation[i] > autocorrelation[i + 1] &&
-          autocorrelation[i] > maxCorrelation) {
-        maxCorrelation = autocorrelation[i];
-        bestLag = i;
-      }
-    }
-    
-    const bestInterval = bestLag * lagResolution;
-    const bpm = bestInterval > 0 ? 60 / bestInterval : 120;
-    const confidence = maxCorrelation;
-    
-    return { bpm, confidence };
-  }
-
-  /**
-   * FFT法によるテンポ推定
-   * @param onsets - オンセット配列
-   * @param duration - 楽曲時間
-   * @returns BPM候補
-   */
-  private fftTempoMethod(onsets: number[], duration: number): {bpm: number, confidence: number} {
-    const resolution = 0.01; // 10ms
-    const length = Math.floor(duration / resolution);
-    const impulseResponse = new Array(length).fill(0);
-    
-    // インパルス応答を作成
-    onsets.forEach(onset => {
-      const index = Math.floor(onset / resolution);
-      if (index < impulseResponse.length) {
-        impulseResponse[index] = 1;
-      }
-    });
-    
-    // FFTでテンポ成分を分析
-    const fftResult = this.realFFT(impulseResponse);
-    
-    // BPM範囲（60-180 BPM）に対応する周波数範囲を検索
-    const minBpm = 60;
-    const maxBpm = 180;
-    const nyquist = 1 / (2 * resolution);
-    
-    let maxMagnitude = 0;
-    let bestFrequency = 0;
-    
-    for (let i = 0; i < fftResult.length / 2; i++) {
-      const frequency = (i * nyquist) / (fftResult.length / 2);
-      const bpm = frequency * 60;
-      
-      if (bpm >= minBpm && bpm <= maxBpm) {
-        const magnitude = Math.abs(fftResult[i]);
-        if (magnitude > maxMagnitude) {
-          maxMagnitude = magnitude;
-          bestFrequency = frequency;
-        }
-      }
-    }
-    
-    const bpm = bestFrequency * 60;
-    const confidence = maxMagnitude / Math.max(...fftResult.map(Math.abs));
-    
-    return { bpm, confidence };
-  }
-
-  /**
-   * 最適なBPMを選択
-   * @param candidates - BPM候補配列
-   * @param onsets - オンセット配列
-   * @returns 最適なBPM候補
-   */
-  private selectBestBPM(candidates: Array<{bpm: number, confidence: number}>, onsets: number[]): {bpm: number, confidence: number} {
-    if (candidates.length === 0) {
-      return { bpm: 120, confidence: 0.1 };
-    }
-    
-    // 候補を重み付きで評価
-    let bestCandidate = candidates[0];
-    let bestScore = 0;
-    
-    candidates.forEach(candidate => {
-      // 複数の評価指標を組み合わせ
-      const confidenceScore = candidate.confidence;
-      const stabilityScore = this.evaluateStability(candidate.bpm, onsets);
-      const musicalScore = this.evaluateMusicalPlausibility(candidate.bpm);
-      
-      const totalScore = (confidenceScore * 0.4) + (stabilityScore * 0.4) + (musicalScore * 0.2);
-      
-      if (totalScore > bestScore) {
-        bestScore = totalScore;
-        bestCandidate = { ...candidate, confidence: totalScore };
-      }
-    });
-    
-    return bestCandidate;
-  }
-
-  /**
-   * BPMの安定性を評価
-   * @param bpm - 評価するBPM
-   * @param onsets - オンセット配列
-   * @returns 安定性スコア（0-1）
-   */
-  private evaluateStability(bpm: number, onsets: number[]): number {
-    if (onsets.length < 2) return 0;
     
     const expectedInterval = 60 / bpm;
-    let errorSum = 0;
-    let count = 0;
+    let consistentBeats = 0;
+    const tolerance = expectedInterval * 0.15; // 15%の許容誤差
     
-    for (let i = 1; i < onsets.length; i++) {
-      const actualInterval = onsets[i] - onsets[i - 1];
-      const normalizedInterval = actualInterval % expectedInterval;
-      const error = Math.min(normalizedInterval, expectedInterval - normalizedInterval);
-      errorSum += error / expectedInterval;
-      count++;
-    }
-    
-    const averageError = count > 0 ? errorSum / count : 1;
-    return Math.max(0, 1 - averageError * 3);
-  }
-
-  /**
-   * 音楽的妥当性を評価
-   * @param bpm - 評価するBPM
-   * @returns 妥当性スコア（0-1）
-   */
-  private evaluateMusicalPlausibility(bpm: number): number {
-    // 一般的な音楽のBPM範囲による重み付け
-    if (bpm >= 80 && bpm <= 140) return 1.0;     // 最も一般的
-    if (bpm >= 60 && bpm <= 80) return 0.8;      // バラード系
-    if (bpm >= 140 && bpm <= 180) return 0.8;    // ダンス系
-    if (bpm >= 50 && bpm <= 60) return 0.6;      // 遅い曲
-    if (bpm >= 180 && bpm <= 200) return 0.6;    // 速い曲
-    return 0.3; // 極端なBPM
-  }
-
-  /**
-   * ビートトラッキング - オンセットからビートを推定
-   * @param onsets - オンセット配列
-   * @param bpm - 検出されたBPM
-   * @param duration - 楽曲時間
-   * @returns ビート配列
-   */
-  private trackBeats(onsets: number[], bpm: number, duration: number): number[] {
-    const beatInterval = 60 / bpm;
-    const beats: number[] = [];
-    
-    if (onsets.length === 0) {
-      // オンセットがない場合は等間隔でビートを生成
-      for (let t = 0; t < duration; t += beatInterval) {
-        beats.push(t);
-      }
-      return beats;
-    }
-    
-    // 最初のオンセットに最も近いビートグリッドを見つける
-    const firstOnset = onsets[0];
-    let bestPhase = 0;
-    let bestScore = 0;
-    
-    // 異なる位相で試行
-    for (let phase = 0; phase < beatInterval; phase += beatInterval / 10) {
-      let score = 0;
-      
-      onsets.forEach(onset => {
-        const beatTime = phase + Math.round((onset - phase) / beatInterval) * beatInterval;
-        const error = Math.abs(onset - beatTime);
-        if (error < beatInterval / 4) { // 許容誤差内
-          score += 1 - (error / (beatInterval / 4));
-        }
-      });
-      
-      if (score > bestScore) {
-        bestScore = score;
-        bestPhase = phase;
+    for (let i = 1; i < beats.length; i++) {
+      const actualInterval = beats[i] - beats[i - 1];
+      if (Math.abs(actualInterval - expectedInterval) <= tolerance) {
+        consistentBeats++;
       }
     }
     
-    // 最適な位相でビートを生成
-    for (let t = bestPhase; t < duration; t += beatInterval) {
-      if (t >= 0) {
-        beats.push(t);
-      }
-    }
+    const consistency = consistentBeats / (beats.length - 1);
     
-    return beats;
+    // ビート数と一貫性から信頼度を計算
+    const beatDensity = Math.min(beats.length / 20, 1); // 20ビート以上で最大
+    const confidence = (consistency * 0.7) + (beatDensity * 0.3);
+    
+    return Math.min(Math.max(confidence, 0.1), 0.95); // 0.1-0.95の範囲
   }
 
   /**
-   * 拍子検出
+   * シンプル小節計算
    * @param beats - ビート配列
    * @param bpm - BPM
-   * @returns 拍子情報
+   * @returns 小節配列
    */
-  private detectTimeSignature(beats: number[], bpm: number): {numerator: number, denominator: number} {
-    // 簡易的な拍子検出（将来的にはより高度なアルゴリズムを実装可能）
-    const beatInterval = 60 / bpm;
-    
-    // ダウンビート検出のためのアクセント分析
-    // 現在は4/4拍子を仮定
-    return { numerator: 4, denominator: 4 };
-  }
-
-  /**
-   * 小節の開始位置を計算
-   * @param beats - ビートのタイムスタンプ配列
-   * @param bpm - 検出されたBPM
-   * @returns 小節の開始タイムスタンプ配列
-   */
-  private calculateBars(beats: number[], bpm: number): number[] {
+  private calculateBarsSimple(beats: number[], bpm: number): number[] {
     const bars: number[] = [];
     const beatInterval = 60 / bpm;
-    const beatsPerBar = 4; // 4/4拍子を仮定
+    const beatsPerBar = 4; // 4/4拍子
     
-    if (beats.length === 0) return bars;
+    if (beats.length === 0) {
+      return bars;
+    }
     
-    // 最初のビートから小節を開始
+    // 最初のビートから開始
     let currentBar = beats[0];
     bars.push(currentBar);
     
-    // 4拍ごとに小節線を追加
+    // 4拍ごとに小節を追加
     while (currentBar < beats[beats.length - 1]) {
       currentBar += beatInterval * beatsPerBar;
       bars.push(currentBar);
@@ -453,113 +218,89 @@ export class BPMDetector {
   }
 
   /**
-   * ハニング窓関数の適用
-   * @param data - 入力データ
-   * @returns 窓関数適用済みデータ
-   */
-  private applyHanningWindow(data: Float32Array): Float32Array {
-    const windowed = new Float32Array(data.length);
-    
-    for (let i = 0; i < data.length; i++) {
-      const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / (data.length - 1)));
-      windowed[i] = data[i] * window;
-    }
-    
-    return windowed;
-  }
-
-  /**
-   * スペクトラム計算（改良版FFT）
-   * @param data - 時間領域データ
-   * @returns 周波数領域データ
-   */
-  private computeSpectrum(data: Float32Array): number[] {
-    // より効率的なFFT実装（実際の製品では専用ライブラリ使用を推奨）
-    const N = data.length;
-    const spectrum: number[] = new Array(N / 2);
-    
-    for (let k = 0; k < N / 2; k++) {
-      let real = 0;
-      let imag = 0;
-      
-      for (let n = 0; n < N; n++) {
-        const angle = -2 * Math.PI * k * n / N;
-        real += data[n] * Math.cos(angle);
-        imag += data[n] * Math.sin(angle);
-      }
-      
-      spectrum[k] = Math.sqrt(real * real + imag * imag);
-    }
-    
-    return spectrum;
-  }
-
-  /**
-   * スペクトラル差分計算
-   * @param prev - 前フレームのスペクトラム
-   * @param current - 現フレームのスペクトラム
-   * @returns スペクトラル差分値
-   */
-  private calculateSpectralDifference(prev: number[], current: number[]): number {
-    let diff = 0;
-    
-    for (let i = 0; i < Math.min(prev.length, current.length); i++) {
-      const currentMag = current[i];
-      const prevMag = prev[i];
-      
-      // 正の差分のみを考慮（新しい音の開始を検出）
-      if (currentMag > prevMag) {
-        diff += (currentMag - prevMag);
-      }
-    }
-    
-    return diff;
-  }
-
-  /**
-   * 適応的閾値計算
-   * @param currentValue - 現在の値
-   * @param frameIndex - フレーム番号
-   * @returns 適応的閾値
-   */
-  private calculateAdaptiveThreshold(currentValue: number, frameIndex: number): number {
-    // 過去のフレームの平均を使用した適応的閾値
-    const baseThreshold = 0.3;
-    const adaptiveFactor = 1.5;
-    
-    // 実際の実装では過去の値の履歴を保持
-    return baseThreshold * adaptiveFactor;
-  }
-
-  /**
-   * ピークピッキング
-   * @param onsets - 生のオンセット配列
+   * 近接ビートの統合
+   * @param beats - 元のビート配列
    * @param minInterval - 最小間隔
-   * @returns フィルタリングされたオンセット配列
+   * @returns 統合されたビート配列
    */
-  private peakPicking(onsets: number[], minInterval: number): number[] {
-    if (onsets.length <= 1) return onsets;
+  private mergeCloseBeats(beats: number[], minInterval: number): number[] {
+    if (beats.length <= 1) return beats;
     
-    const filtered: number[] = [onsets[0]];
+    const merged: number[] = [beats[0]];
     
-    for (let i = 1; i < onsets.length; i++) {
-      const lastOnset = filtered[filtered.length - 1];
-      if (onsets[i] - lastOnset >= minInterval) {
-        filtered.push(onsets[i]);
+    for (let i = 1; i < beats.length; i++) {
+      const lastBeat = merged[merged.length - 1];
+      if (beats[i] - lastBeat >= minInterval) {
+        merged.push(beats[i]);
       }
     }
     
-    return filtered;
+    return merged;
   }
 
   /**
-   * 実数FFT（効率化版）
-   * @param data - 入力データ
-   * @returns FFT結果
+   * 周波数解析（軽量版）
+   * @param audioBuffer - 音声バッファ
+   * @param currentTime - 現在時刻
+   * @returns 音声解析結果
    */
-  private realFFT(data: number[]): number[] {
-    const N = data.length;
-    const result: number[] = new Array(N);
+  analyzeFrequencies(audioBuffer: AudioBuffer, currentTime: number): AudioAnalysis {
+    const sampleIndex = Math.floor(currentTime * this.sampleRate);
+    const windowSize = 512; // 軽量化
+    const channelData = audioBuffer.getChannelData(0);
+    
+    const windowData = channelData.slice(sampleIndex, sampleIndex + windowSize);
+    
+    // 簡易FFT（軽量版）
+    const fftData = this.simpleFFT(windowData);
+    const frequencyBands = this.analyzeFrequencyBands(fftData);
+    
+    // RMS計算
+    let rms = 0;
+    let peak = 0;
+    for (let i = 0; i < windowData.length; i++) {
+      const sample = Math.abs(windowData[i]);
+      rms += sample * sample;
+      if (sample > peak) peak = sample;
+    }
+    rms = Math.sqrt(rms / windowData.length);
+    
+    // スペクトラル重心（簡易版）
+    let centroid = 0;
+    let totalMagnitude = 0;
+    for (let i = 0; i < fftData.length; i++) {
+      const frequency = (i * this.sampleRate) / (2 * fftData.length);
+      centroid += frequency * fftData[i];
+      totalMagnitude += fftData[i];
+    }
+    centroid = totalMagnitude > 0 ? centroid / totalMagnitude : 0;
+    
+    // ゼロクロッシング率
+    let crossings = 0;
+    for (let i = 1; i < windowData.length; i++) {
+      if ((windowData[i] >= 0) !== (windowData[i - 1] >= 0)) {
+        crossings++;
+      }
+    }
+    const zcr = crossings / windowData.length;
+    
+    return {
+      frequencyBands,
+      rms,
+      peak,
+      spectralCentroid: centroid,
+      zcr
+    };
+  }
+
+  /**
+   * 簡易FFT（軽量版）
+   * @param data - 入力データ
+   * @returns 周波数ドメインデータ
+   */
+  private simpleFFT(data: Float32Array): Float32Array {
+    const N = Math.min(data.length, 256); // 軽量化
+    const result = new Float32Array(N / 2);
     
     for (let k = 0; k < N / 2; k++) {
       let real = 0;
@@ -571,141 +312,53 @@ export class BPMDetector {
         imag += data[n] * Math.sin(angle);
       }
       
-      result[k] = real;
-      result[k + N / 2] = imag;
+      result[k] = Math.sqrt(real * real + imag * imag);
     }
     
     return result;
   }
 
   /**
-   * リアルタイム周波数解析
-   * @param audioBuffer - 解析対象のオーディオバッファ
-   * @param currentTime - 現在の再生時間
-   * @returns 周波数帯域の解析結果
-   */
-  analyzeFrequencies(audioBuffer: AudioBuffer, currentTime: number): AudioAnalysis {
-    // 現在時刻のオーディオデータを取得
-    const sampleIndex = Math.floor(currentTime * this.sampleRate);
-    const windowSize = 1024;
-    const channelData = audioBuffer.getChannelData(0);
-    
-    // ウィンドウ範囲のデータを取得
-    const windowData = channelData.slice(sampleIndex, sampleIndex + windowSize);
-    
-    // FFT解析
-    const fftData = this.computeSpectrum(new Float32Array(windowData));
-    const frequencyBands = this.analyzeFrequencyBands(fftData);
-    
-    // RMS（音量レベル）計算
-    const rms = this.calculateRMS(new Float32Array(windowData));
-    
-    // ピーク計算
-    let peak = 0;
-    for (let i = 0; i < windowData.length; i++) {
-      const v = Math.abs(windowData[i]);
-      if (v > peak) peak = v;
-    }
-    
-    // スペクトラル重心（音の明るさ）計算
-    const spectralCentroid = this.calculateSpectralCentroid(fftData);
-    
-    // ゼロクロッシング率計算
-    const zcr = this.calculateZeroCrossingRate(new Float32Array(windowData));
-    
-    return {
-      frequencyBands,
-      rms,
-      peak,
-      spectralCentroid,
-      zcr
-    };
-  }
-
-  /**
-   * 周波数帯域解析
+   * 周波数帯域解析（軽量版）
    * @param fftData - FFT結果
-   * @returns 周波数帯域ごとの解析結果
+   * @returns 周波数帯域配列
    */
-  private analyzeFrequencyBands(fftData: number[]): FrequencyBand[] {
+  private analyzeFrequencyBands(fftData: Float32Array): FrequencyBand[] {
     const nyquist = this.sampleRate / 2;
     const binSize = nyquist / fftData.length;
     
     const bands: FrequencyBand[] = [];
     
-    Object.entries(FREQUENCY_BANDS).forEach(([name, range]) => {
+    // 主要な帯域のみ解析
+    const simpleBands = {
+      'Bass': [20, 250],
+      'Mids': [250, 4000],
+      'Highs': [4000, 20000]
+    };
+    
+    Object.entries(simpleBands).forEach(([name, range]) => {
       const [lowHz, highHz] = range;
       const lowBin = Math.floor(lowHz / binSize);
-      const highBin = Math.floor(highHz / binSize);
+      const highBin = Math.min(Math.floor(highHz / binSize), fftData.length - 1);
       
-      // 指定範囲の平均エネルギーを計算
       let energy = 0;
-      for (let i = lowBin; i <= highBin && i < fftData.length; i++) {
+      for (let i = lowBin; i <= highBin; i++) {
         energy += fftData[i];
       }
       energy /= (highBin - lowBin + 1);
       
-      // 正規化（0-1範囲）
-      const normalizedEnergy = Math.min(energy / 100, 1);
+      const normalizedEnergy = Math.min(energy / 50, 1); // 軽量化
       
       bands.push({
         name,
         range: [lowHz, highHz],
         energy: normalizedEnergy,
-        threshold: 0.7, // デフォルト閾値
-        triggered: normalizedEnergy > 0.7
+        threshold: 0.6,
+        triggered: normalizedEnergy > 0.6
       });
     });
     
     return bands;
-  }
-
-  /**
-   * RMS（Root Mean Square）計算
-   * @param data - 音声データ
-   * @returns RMS値
-   */
-  private calculateRMS(data: Float32Array): number {
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-      sum += data[i] * data[i];
-    }
-    return Math.sqrt(sum / data.length);
-  }
-
-  /**
-   * スペクトラル重心計算（音の明るさの指標）
-   * @param fftData - FFT結果
-   * @returns スペクトラル重心
-   */
-  private calculateSpectralCentroid(fftData: number[]): number {
-    let weightedSum = 0;
-    let magnitudeSum = 0;
-    
-    for (let i = 0; i < fftData.length; i++) {
-      const frequency = (i * this.sampleRate) / (2 * fftData.length);
-      weightedSum += frequency * fftData[i];
-      magnitudeSum += fftData[i];
-    }
-    
-    return magnitudeSum > 0 ? weightedSum / magnitudeSum : 0;
-  }
-
-  /**
-   * ゼロクロッシング率計算
-   * @param data - 音声データ
-   * @returns ゼロクロッシング率
-   */
-  private calculateZeroCrossingRate(data: Float32Array): number {
-    let crossings = 0;
-    
-    for (let i = 1; i < data.length; i++) {
-      if ((data[i] >= 0) !== (data[i - 1] >= 0)) {
-        crossings++;
-      }
-    }
-    
-    return crossings / data.length;
   }
 
   /**
@@ -719,13 +372,13 @@ export class BPMDetector {
 }
 
 /**
- * 初心者向けヘルパー関数：音声ファイルをAudioBufferに変換
+ * 軽量版: 音声ファイルをAudioBufferに変換
  * @param audioFile - File または Blob オブジェクト
  * @returns AudioBuffer
  */
 export async function loadAudioFile(audioFile: File | Blob): Promise<AudioBuffer> {
   try {
-    console.log('📁 音声ファイルを読み込み中...');
+    console.log('📁 音声ファイルを高速読み込み中...');
     
     const arrayBuffer = await audioFile.arrayBuffer();
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();

@@ -36,7 +36,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
 
   /**
-   * BPM検出の実行 - 改良版アルゴリズム使用
+   * BPM検出の実行 - 軽量版アルゴリズム使用（高速処理）
    */
   const detectBPM = useCallback(async () => {
     if (!audioFile) return;
@@ -47,10 +47,11 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
       setProgress(0);
       onAnalysisStart?.();
 
-      console.log('🎵 改良版BPM検出を開始します');
+      console.log('🎵 軽量版BPM検出を開始します（高速処理）');
 
-      // 進行状況の更新（UI向け）
-      setProgress(10);
+      // 進行状況の更新（現実的なタイミング）
+      setProgress(15);
+      await new Promise(resolve => setTimeout(resolve, 100)); // UI更新用
 
       // 音声ファイルをAudioBufferに変換（改良版）
       let arrayBuffer: ArrayBuffer;
@@ -87,28 +88,36 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
         }
       }
       
+      setProgress(35);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
       setAudioBuffer(buffer);
-      setProgress(30);
-
-      // 改良版BPM検出器の作成と実行
-      const detector = new BPMDetector();
       setProgress(50);
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // 軽量版BPM検出器の作成と実行
+      console.log('🚀 高速アルゴリズムで解析中...');
+      const detector = new BPMDetector();
+      setProgress(65);
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const analysis = await detector.detectBPM(buffer);
       setProgress(90);
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // 結果の保存と通知
       setResult(analysis);
       onBPMDetected(analysis);
       setProgress(100);
 
-      console.log('✅ 改良版BPM検出完了:', {
+      console.log('✅ 軽量版BPM検出完了:', {
         bpm: analysis.bpm,
         confidence: Math.round(analysis.confidence * 100) + '%',
         beats: analysis.beatTimes.length,
-        bars: analysis.bars.length
+        bars: analysis.bars.length,
+        processingTime: 'Fast'
       });
 
       // クリーンアップ
@@ -179,13 +188,13 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
 
   // ヘルプテキスト
   const getHelpText = () => {
-    if (isAnalyzing) return '改良版アルゴリズムでBPMを解析中です。少々お待ちください...';
+    if (isAnalyzing) return '軽量版アルゴリズムでBPMを高速解析中です。少々お待ちください...';
     if (result) {
       const { message } = getConfidenceMessage(result.confidence);
       return `BPM検出完了！${message} タイムラインでビートマーカーを確認できます。`;
     }
     if (error) return 'エラーが発生しました。音声ファイルを確認してもう一度お試しください。';
-    return 'このボタンを押すと、楽曲のテンポ（BPM）を複数アルゴリズムで高精度検出します。';
+    return 'このボタンを押すと、楽曲のテンポ（BPM）を高速アルゴリズムで検出します。';
   };
 
   return (
@@ -345,7 +354,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
         <p>{getHelpText()}</p>
       </div>
 
-      {/* 改良版アルゴリズムの説明 */}
+      {/* 軽量版アルゴリズムの説明 */}
       <AnimatePresence>
         {result && (
           <>
@@ -357,12 +366,12 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
             >
               <div className="flex items-center space-x-2 mb-2">
                 <BarChart3 className="w-3 h-3 text-blue-400" />
-                <span className="text-xs font-medium text-blue-400">改良版アルゴリズム</span>
+                <span className="text-xs font-medium text-blue-400">軽量版アルゴリズム</span>
               </div>
               <div className="text-xs text-blue-300 space-y-1">
-                <p>• オンセット検出 + スペクトラル分析</p>
-                <p>• インターバルヒストグラム + 自己相関法</p>
-                <p>• 複数手法の結果を統合して高精度化</p>
+                <p>• エネルギーベースの高速ビート検出</p>
+                <p>• 中央値を使用したBPM算出</p>
+                <p>• ブラウザ環境での高速処理に特化</p>
               </div>
             </motion.div>
             
