@@ -5,11 +5,11 @@ import { useParams } from 'react-router-dom';
 // Components
 import { MediaLibrary } from '../components/media/MediaLibrary';
 import Timeline from '../components/timeline/Timeline';
-import EnhancedAudioTimeline from '../components/timeline/EnhancedAudioTimeline';
+
 import PlaybackControls from '../components/editor/PlaybackControls';
-import AudioAnalysis from '../components/AudioAnalysis/AudioAnalysis';
-import EffectPresetsLibrary from '../components/effects/EffectPresetsLibrary';
-import BPMDetectorComponent from '../components/audio/BPMDetector';
+
+
+
 import RightPanel from '../components/panels/RightPanel';
 import { ExportPanel, ExportProgress } from '../components/export';
 
@@ -68,7 +68,6 @@ import {
 
 // Types
 import type { Project, TimelineClip, MediaFile, Resolution, ExportJob } from '../types';
-import type { EffectPreset } from '../utils/effects/effectPresets';
 import { processMediaFile } from '../utils/media/mediaProcessor';
 
 // PopupPreview Manager
@@ -330,7 +329,7 @@ const Editor: React.FC = () => {
   const [zoom, setZoom] = useState(1);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-  const [activePanel, setActivePanel] = useState<'media' | 'effects'>('media');
+  const [activePanel, setActivePanel] = useState<'media'>('media');
   const [showExportModal, setShowExportModal] = useState(false);
   
   // Export state
@@ -348,16 +347,13 @@ const Editor: React.FC = () => {
   // Timeline state
   const [timelineHeight, setTimelineHeight] = useState(200);
   const [isResizingTimeline, setIsResizingTimeline] = useState(false);
-  const [showEnhancedAudio, setShowEnhancedAudio] = useState(false);
   
   // Preview state - ポップアウト機能復活
   const [videoResolution, setVideoResolution] = useState<Resolution>('9:16');
   const [previewWindows, setPreviewWindows] = useState<string[]>([]);
   const [showPiP, setShowPiP] = useState(false);
   
-  // Audio Analysis state
-  const [showAudioAnalysis, setShowAudioAnalysis] = useState(false);
-  const [selectedAudioFile, setSelectedAudioFile] = useState<MediaFile | null>(null);
+
   
   // Mock user data
   const [user] = useState({
@@ -372,7 +368,7 @@ const Editor: React.FC = () => {
     }
   });
 
-  // エフェクトプリセット関連は削除（右カラムに移動のため）
+
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -463,27 +459,7 @@ const Editor: React.FC = () => {
     }
   }, []);
 
-  // エフェクトプリセット適用
-  const handleApplyPreset = useCallback((updatedClip: TimelineClip) => {
-    setProject(prev => ({
-      ...prev,
-      timeline: {
-        ...prev.timeline,
-        clips: prev.timeline.clips.map(clip => 
-          clip.id === updatedClip.id ? updatedClip : clip
-        )
-      }
-    }));
-    
-    setSelectedClip(updatedClip);
-    console.log(`✨ エフェクトプリセットを適用: ${updatedClip.id}`);
-  }, []);
 
-  // エフェクトプリセットプレビュー
-  const handlePreviewPreset = useCallback((preset: EffectPreset) => {
-    console.log(`👁️ プリセットプレビュー: ${preset.name}`);
-    // ここで実際のプレビュー処理を実装可能
-  }, []);
 
   // Popup preview functions - 復活
   const createPreviewWindow = useCallback((resolution: Resolution) => {
@@ -647,15 +623,7 @@ const Editor: React.FC = () => {
     }));
   };
   
-  const handleAudioAnalyze = (file: MediaFile) => {
-    setSelectedAudioFile(file);
-    setShowAudioAnalysis(true);
-  };
-  
-  const handleCloseAudioAnalysis = () => {
-    setShowAudioAnalysis(false);
-    setSelectedAudioFile(null);
-  };
+
 
   const handleClipSelect = (clip: TimelineClip) => {
     setSelectedClip(clip);
@@ -882,79 +850,45 @@ const Editor: React.FC = () => {
           {!isLeftPanelCollapsed && (
             <>
               <div className="p-4 border-b border-dark-700">
-                <div className="flex space-x-1">
-                  {[
-                    { id: 'media', label: 'メディア', icon: Image },
-                    { id: 'effects', label: 'エフェクト', icon: Sparkles }
-                  ].map(tab => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActivePanel(tab.id as any)}
-                        className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                          activePanel === tab.id 
-                            ? 'bg-purple-500 text-white' 
-                            : 'text-gray-400 hover:text-white hover:bg-dark-700'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center space-x-2">
+                  <Image className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-medium text-purple-400">メディアライブラリ</span>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-hidden">
-                {activePanel === 'media' && (
-                  <div className="p-4">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 mb-4"
-                    >
-                      <Upload className="w-5 h-5" />
-                      <span>ファイルをアップロード</span>
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*,video/*,audio/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          handleMediaUploadOld(e.target.files);
-                          // 連続アップロードで同じファイル選択も発火するように value リセット
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                    />
-                    
-                    <MediaLibrary
-                      mediaFiles={project.mediaLibrary}
-                      onUpload={handleMediaUpload}
-                      onAudioAnalyze={handleAudioAnalyze}
-                    />
-                    
-                    {project.mediaLibrary.length === 0 && (
-                      <div className="text-center py-8">
-                        <Image className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                        <p className="text-gray-400 text-sm">メディアファイルがありません</p>
-                        <p className="text-gray-500 text-xs mt-1">音楽をアップロードすると時間が自動調整されます</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activePanel === 'effects' && (
-                  <div className="h-full overflow-hidden">
-                    <EffectPresetsLibrary
-                      selectedClip={selectedClip}
-                      onApplyPreset={handleApplyPreset}
-                      onPreviewPreset={handlePreviewPreset}
-                      className="h-full"
-                    />
+              <div className="flex-1 overflow-hidden p-4">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 mb-4"
+                >
+                  <Upload className="w-5 h-5" />
+                  <span>ファイルをアップロード</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,audio/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleMediaUploadOld(e.target.files);
+                      // 連続アップロードで同じファイル選択も発火するように value リセット
+                      e.currentTarget.value = '';
+                    }
+                  }}
+                />
+                
+                <MediaLibrary
+                  mediaFiles={project.mediaLibrary}
+                  onUpload={handleMediaUpload}
+                />
+                
+                {project.mediaLibrary.length === 0 && (
+                  <div className="text-center py-8">
+                    <Image className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">メディアファイルがありません</p>
+                    <p className="text-gray-500 text-xs mt-1">音楽をアップロードすると時間が自動調整されます</p>
                   </div>
                 )}
               </div>
@@ -1108,57 +1042,24 @@ const Editor: React.FC = () => {
                     <Video className="w-4 h-4 text-purple-400" />
                     タイムライン - 高さ調整可能
                   </h3>
-                  <button
-                    onClick={() => setShowEnhancedAudio(!showEnhancedAudio)}
-                    className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-all ${
-                      showEnhancedAudio 
-                        ? 'bg-cyan-500 text-white' 
-                        : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
-                    }`}
-                  >
-                    <Music className="w-3 h-3" />
-                    <span>音声波形</span>
-                  </button>
+
                 </div>
                 <div className="text-xs text-gray-400">
                   高さ: {timelineHeight}px | 長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}
-                  {showEnhancedAudio && ' | 音声波形表示中'}
                 </div>
               </div>
             </div>
             
             <div className="h-full overflow-hidden">
-              <div className="flex h-full">
-                {/* メインタイムライン */}
-                <div className={`transition-all duration-300 ${
-                  showEnhancedAudio ? 'w-2/3' : 'w-full'
-                }`}>
-                  <Timeline
-                    timeline={project.timeline}
-                    playheadPosition={playheadPosition}
-                    zoom={zoom}
-                    onClipSelect={handleClipSelect}
-                    onTimelineUpdate={(timeline) => 
-                      setProject(prev => ({ ...prev, timeline }))
-                    }
-                  />
-                </div>
-                
-                {/* Enhanced Audio Timeline */}
-                {showEnhancedAudio && (
-                  <div className="w-1/3 border-l border-dark-700 transition-all duration-300">
-                    <EnhancedAudioTimeline
-                      timeline={project.timeline}
-                      onTimelineUpdate={(timeline) => 
-                        setProject(prev => ({ ...prev, timeline }))
-                      }
-                      playheadPosition={playheadPosition}
-                      zoom={zoom}
-                      className="h-full"
-                    />
-                  </div>
-                )}
-              </div>
+              <Timeline
+                timeline={project.timeline}
+                playheadPosition={playheadPosition}
+                zoom={zoom}
+                onClipSelect={handleClipSelect}
+                onTimelineUpdate={(timeline) => 
+                  setProject(prev => ({ ...prev, timeline }))
+                }
+              />
             </div>
           </motion.div>
         </div>
@@ -1201,27 +1102,28 @@ const Editor: React.FC = () => {
               onCreatePreviewWindow={createPreviewWindow}
               onClosePreviewWindow={closePreviewWindow}
               onProjectUpdate={setProject}
-              onApplyPreset={handleApplyPreset}
-              onPreviewPreset={handlePreviewPreset}
+              onApplyPreset={(clip) => {
+                setProject(prev => ({
+                  ...prev,
+                  timeline: {
+                    ...prev.timeline,
+                    clips: prev.timeline.clips.map(c => 
+                      c.id === clip.id ? clip : c
+                    )
+                  }
+                }));
+                setSelectedClip(clip);
+                console.log('✨ エフェクトプリセット適用:', clip.id);
+              }}
+              onPreviewPreset={(preset) => {
+                console.log('👁️ プリセットプレビュー:', preset.name);
+              }}
             />
           )}
         </motion.div>
       </div>
 
-      {/* Audio Analysis Modal */}
-      {showAudioAnalysis && selectedAudioFile && (
-        <AudioAnalysis
-          mediaFile={{
-            id: selectedAudioFile.id,
-            name: selectedAudioFile.name,
-            type: selectedAudioFile.type,
-            url: selectedAudioFile.url,
-            analysis: (selectedAudioFile as any).analysis,
-            processing: (selectedAudioFile as any).processing
-          }}
-          onClose={handleCloseAudioAnalysis}
-        />
-      )}
+
 
       {/* Status Bar */}
       <motion.div

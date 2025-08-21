@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
@@ -11,12 +11,19 @@ import {
   ExternalLink,
   X,
   Info,
-  Zap
+  Zap,
+  BarChart3,
+  Activity,
+  Upload,
+  Volume2,
+  Play,
+  Pause
 } from 'lucide-react';
 
-import type { MediaFile, TimelineClip, Resolution, Project } from '@/types';
+import type { MediaFile, TimelineClip, Resolution, Project, AudioTrack } from '@/types';
 import BPMDetectorComponent from '../audio/BPMDetector';
 import EffectPresetsLibrary from '../effects/EffectPresetsLibrary';
+import WaveformDisplay from '../waveform/WaveformDisplay';
 import type { EffectPreset } from '../../utils/effects/effectPresets';
 
 // Video resolution options
@@ -82,8 +89,10 @@ const RightPanel: React.FC<RightPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'properties' | 'audio' | 'effects'>('properties');
   const [selectedAudioFile, setSelectedAudioFile] = useState<MediaFile | null>(null);
+  const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack | null>(null);
 
   const audioFiles = project.mediaLibrary.filter(file => file.type === 'audio');
+  const audioTracks = project.timeline.audioTracks || [];
 
   const handleProjectTimeChange = (newDuration: number) => {
     onProjectUpdate({
@@ -99,13 +108,65 @@ const RightPanel: React.FC<RightPanelProps> = ({
     });
   };
 
+  // BPM検出結果をプロジェクトに反映
+  const handleBPMDetected = useCallback((analysis: any) => {
+    if (!selectedAudioFile) return;
+
+    // 既存のオーディオトラックを更新、または新規作成
+    const existingTrackIndex = audioTracks.findIndex(track => 
+      track.name === selectedAudioFile.name
+    );
+
+    let updatedAudioTracks;
+    if (existingTrackIndex >= 0) {
+      // 既存トラックを更新
+      updatedAudioTracks = audioTracks.map((track, index) => 
+        index === existingTrackIndex 
+          ? {
+              ...track,
+              bpm: analysis.bpm,
+              beats: analysis.beatTimes,
+              bars: analysis.bars,
+              confidence: analysis.confidence
+            }
+          : track
+      );
+    } else {
+      // 新規トラックを作成
+      const newTrack: AudioTrack = {
+        id: `audio_${Date.now()}`,
+        name: selectedAudioFile.name,
+        url: selectedAudioFile.url,
+        startTime: 0,
+        duration: selectedAudioFile.duration || 0,
+        volume: 1,
+        muted: false,
+        bpm: analysis.bpm,
+        beats: analysis.beatTimes,
+        bars: analysis.bars,
+        confidence: analysis.confidence
+      };
+      updatedAudioTracks = [...audioTracks, newTrack];
+    }
+
+    onProjectUpdate({
+      ...project,
+      timeline: {
+        ...project.timeline,
+        audioTracks: updatedAudioTracks
+      }
+    });
+
+    console.log('✅ BPM検出結果をプロジェクトに反映:', analysis);
+  }, [selectedAudioFile, audioTracks, project, onProjectUpdate]);
+
   return (
     <div className="h-full flex flex-col bg-dark-800">
       {/* ヘッダー */}
       <div className="p-4 border-b border-dark-700 flex-shrink-0">
         <h2 className="text-lg font-semibold flex items-center space-x-2 mb-3">
           <Settings className="w-5 h-5 text-purple-400" />
-          <span>パネル</span>
+          <span>コントロールパネル</span>
         </h2>
         
         {/* タブナビゲーション */}
@@ -268,7 +329,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
             </motion.div>
           )}
 
-          {/* 音声解析タブ */}
+          {/* 音声解析タブ - 強化版 */}
           {activeTab === 'audio' && (
             <motion.div
               key="audio"
@@ -277,21 +338,33 @@ const RightPanel: React.FC<RightPanelProps> = ({
               exit={{ opacity: 0, x: -20 }}
               className="h-full flex flex-col"
             >
-              {/* 音声ファイル選択 */}
+              {/* 音声ファイル/トラック選択 */}
               <div className="p-4 border-b border-dark-700 flex-shrink-0">
-                <h3 className="text-sm font-medium mb-3">音声ファイルを選択</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium">音声ファイルを選択</h3>
+                  <div className="flex items-center space-x-2 text-xs text-gray-400">
+                    <Activity className="w-3 h-3" />
+                    <span>BPM検出 + 波形解析</span>
+                  </div>
+                </div>
+                
                 {audioFiles.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Music className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                  <div className="text-center py-6">
+                    <Music className="w-10 h-10 text-gray-500 mx-auto mb-3" />
                     <p className="text-gray-400 text-sm">音声ファイルがありません</p>
-                    <p className="text-gray-500 text-xs mt-1">左のメディアタブから音楽をアップロードしてください</p>
+                    <p className="text-gray-500 text-xs mt-1">左のメディアライブラリから音楽をアップロードしてください</p>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-dark-600 scrollbar-track-dark-800">
                     {audioFiles.map((audioFile) => (
                       <button
                         key={audioFile.id}
-                        onClick={() => setSelectedAudioFile(audioFile)}
+                        onClick={() => {
+                          setSelectedAudioFile(audioFile);
+                          // 対応するオーディオトラックがあれば選択
+                          const correspondingTrack = audioTracks.find(track => track.name === audioFile.name);
+                          setSelectedAudioTrack(correspondingTrack || null);
+                        }}
                         className={`w-full text-left p-3 rounded-lg border transition-all ${
                           selectedAudioFile?.id === audioFile.id
                             ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
@@ -304,8 +377,30 @@ const RightPanel: React.FC<RightPanelProps> = ({
                             <p className="text-sm font-medium truncate">{audioFile.name}</p>
                             <p className="text-xs text-gray-500">
                               {audioFile.duration ? `${Math.floor(audioFile.duration / 60)}:${(audioFile.duration % 60).toFixed(0).padStart(2, '0')}` : '不明'}
+                              {/* BPM情報があれば表示 */}
+                              {(() => {
+                                const track = audioTracks.find(t => t.name === audioFile.name);
+                                return track?.bpm ? ` • ${track.bpm} BPM` : '';
+                              })()}
                             </p>
                           </div>
+                          {/* 信頼度インジケーター */}
+                          {(() => {
+                            const track = audioTracks.find(t => t.name === audioFile.name);
+                            if (track?.confidence) {
+                              const confidence = Math.round(track.confidence * 100);
+                              return (
+                                <div className={`text-xs px-2 py-1 rounded ${
+                                  confidence >= 70 ? 'bg-green-500/20 text-green-400' :
+                                  confidence >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {confidence}%
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       </button>
                     ))}
@@ -313,23 +408,68 @@ const RightPanel: React.FC<RightPanelProps> = ({
                 )}
               </div>
               
+              {/* 音声波形表示エリア */}
+              {selectedAudioTrack && (
+                <div className="p-4 border-b border-dark-700 bg-dark-850">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-cyan-400" />
+                    音声波形
+                  </h4>
+                  <div className="bg-dark-800 rounded-lg p-3">
+                    <WaveformDisplay
+                      audioTrack={selectedAudioTrack}
+                      width={240}
+                      height={80}
+                      startTime={0}
+                      duration={selectedAudioTrack.duration}
+                      zoom={1}
+                      color={selectedAudioTrack.muted ? '#6b7280' : '#06b6d4'}
+                      showBeats={true}
+                      className="w-full"
+                      onWaveformClick={(time) => {
+                        console.log(`Waveform clicked at ${time}s`);
+                        // ここで再生位置の移動などを実装
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-400 mt-2 flex justify-between">
+                    <span>ビート数: {selectedAudioTrack.beats?.length || 0}</span>
+                    <span>小節数: {selectedAudioTrack.bars?.length || 0}</span>
+                  </div>
+                </div>
+              )}
+              
               {/* BPM検出エリア */}
               <div className="flex-1 overflow-hidden">
                 {selectedAudioFile ? (
                   <div className="h-full p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-dark-600 scrollbar-track-dark-800">
                     <BPMDetectorComponent
                       audioFile={selectedAudioFile}
-                      onBPMDetected={(analysis) => {
-                        console.log('BPM detected:', analysis);
-                        // BPM情報をプロジェクトに保存
-                      }}
+                      onBPMDetected={handleBPMDetected}
                     />
+                    
+                    {/* BPM検出の信頼性について */}
+                    <div className="mt-4 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-amber-300">
+                          <p className="font-medium mb-1">BPM検出の信頼度について</p>
+                          <p>• 70%以上: 高精度（推奨）</p>
+                          <p>• 40-69%: 中程度（要確認）</p>
+                          <p>• 40%未満: 低精度（手動調整推奨）</p>
+                          <p className="mt-1 text-amber-400">
+                            信頼度が低い場合は、楽曲の構造を手動で確認してください
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-full p-8">
                     <div className="text-center">
                       <Zap className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                       <p className="text-gray-400 text-sm">音声ファイルを選択してBPM検出を開始</p>
+                      <p className="text-gray-500 text-xs mt-1">選択後、音声波形も表示されます</p>
                     </div>
                   </div>
                 )}

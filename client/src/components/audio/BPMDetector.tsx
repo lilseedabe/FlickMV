@@ -35,7 +35,9 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
 
-  // BPM検出の実行
+  /**
+   * BPM検出の実行 - 改良版アルゴリズム使用
+   */
   const detectBPM = useCallback(async () => {
     if (!audioFile) return;
 
@@ -45,33 +47,37 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
       setProgress(0);
       onAnalysisStart?.();
 
-      console.log('🎵 BPM検出を開始します');
+      console.log('🎵 改良版BPM検出を開始します');
 
       // 進行状況の更新（UI向け）
-      setProgress(20);
+      setProgress(10);
 
       // 音声ファイルをAudioBufferに変換
-      // audioFile.urlから実際のファイルを取得
       const response = await fetch(audioFile.url);
       const arrayBuffer = await response.arrayBuffer();
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
       setAudioBuffer(buffer);
-      setProgress(40);
+      setProgress(30);
 
-      // BPM検出器の作成と実行
+      // 改良版BPM検出器の作成と実行
       const detector = new BPMDetector();
-      setProgress(60);
+      setProgress(50);
 
       const analysis = await detector.detectBPM(buffer);
-      setProgress(80);
+      setProgress(90);
 
       // 結果の保存と通知
       setResult(analysis);
       onBPMDetected(analysis);
       setProgress(100);
 
-      console.log('✅ BPM検出完了:', analysis);
+      console.log('✅ 改良版BPM検出完了:', {
+        bpm: analysis.bpm,
+        confidence: Math.round(analysis.confidence * 100) + '%',
+        beats: analysis.beatTimes.length,
+        bars: analysis.bars.length
+      });
 
       // クリーンアップ
       detector.dispose();
@@ -116,12 +122,24 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
     }
   }, [audioBuffer, audioContext, isPlaying]);
 
+  // 信頼度に基づくアドバイス
+  const getConfidenceMessage = (confidence: number) => {
+    if (confidence >= 0.8) return { message: '高精度な検出結果です！', color: 'text-green-400' };
+    if (confidence >= 0.6) return { message: '良好な検出結果です。', color: 'text-blue-400' };
+    if (confidence >= 0.4) return { message: '中程度の精度です。手動調整を推奨。', color: 'text-yellow-400' };
+    if (confidence >= 0.2) return { message: '低精度です。BPMを手動で確認してください。', color: 'text-orange-400' };
+    return { message: 'とても低い精度です。別の楽曲で試してください。', color: 'text-red-400' };
+  };
+
   // ヘルプテキスト
   const getHelpText = () => {
-    if (isAnalyzing) return 'BPMを解析中です。少々お待ちください...';
-    if (result) return 'BPMの検出が完了しました！タイムラインでビートマーカーを確認できます。';
+    if (isAnalyzing) return '改良版アルゴリズムでBPMを解析中です。少々お待ちください...';
+    if (result) {
+      const { message } = getConfidenceMessage(result.confidence);
+      return `BPM検出完了！${message} タイムラインでビートマーカーを確認できます。`;
+    }
     if (error) return 'エラーが発生しました。音声ファイルを確認してもう一度お試しください。';
-    return 'このボタンを押すと、楽曲のテンポ（BPM）を自動検出します。';
+    return 'このボタンを押すと、楽曲のテンポ（BPM）を複数アルゴリズムで高精度検出します。';
   };
 
   return (
@@ -228,15 +246,22 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
               <span className="text-sm font-medium text-green-400">検出完了</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-3">
               <div className="text-center">
                 <div className="text-2xl font-bold text-white">{result.bpm}</div>
                 <div className="text-xs text-gray-400">BPM</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-white">{Math.round(result.confidence * 100)}%</div>
+                <div className={`text-2xl font-bold ${getConfidenceMessage(result.confidence).color}`}>
+                  {Math.round(result.confidence * 100)}%
+                </div>
                 <div className="text-xs text-gray-400">信頼度</div>
               </div>
+            </div>
+            
+            {/* 信頼度メッセージ */}
+            <div className={`text-center text-sm ${getConfidenceMessage(result.confidence).color} mb-2`}>
+              {getConfidenceMessage(result.confidence).message}
             </div>
 
             <div className="mt-3 pt-3 border-t border-green-500/20">
@@ -274,25 +299,45 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
         <p>{getHelpText()}</p>
       </div>
 
-      {/* BPM検出後の機能案内 */}
+      {/* 改良版アルゴリズムの説明 */}
       <AnimatePresence>
         {result && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mt-4 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3"
-          >
-            <div className="flex items-center space-x-2 mb-2">
-              <Zap className="w-3 h-3 text-purple-400" />
-              <span className="text-xs font-medium text-purple-400">次のステップ</span>
-            </div>
-            <div className="text-xs text-gray-300 space-y-1">
-              <p>• タイムラインでビートマーカーを確認できます</p>
-              <p>• ビートスナップ機能でクリップを正確に配置</p>
-              <p>• BPMに合わせたプリセットを使用可能</p>
-            </div>
-          </motion.div>
+          <>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mt-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3"
+            >
+              <div className="flex items-center space-x-2 mb-2">
+                <BarChart3 className="w-3 h-3 text-blue-400" />
+                <span className="text-xs font-medium text-blue-400">改良版アルゴリズム</span>
+              </div>
+              <div className="text-xs text-blue-300 space-y-1">
+                <p>• オンセット検出 + スペクトラル分析</p>
+                <p>• インターバルヒストグラム + 自己相関法</p>
+                <p>• 複数手法の結果を統合して高精度化</p>
+              </div>
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mt-3 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3"
+            >
+              <div className="flex items-center space-x-2 mb-2">
+                <Zap className="w-3 h-3 text-purple-400" />
+                <span className="text-xs font-medium text-purple-400">次のステップ</span>
+              </div>
+              <div className="text-xs text-gray-300 space-y-1">
+                <p>• タイムラインでビートマーカーを確認できます</p>
+                <p>• ビートスナップ機能でクリップを正確に配置</p>
+                <p>• BPMに合わせたプリセットを使用可能</p>
+                <p>• 信頼度が低い場合は手動で調整を推奨</p>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

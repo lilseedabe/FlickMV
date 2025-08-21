@@ -120,6 +120,7 @@ export interface AudioTrack {
   bpm?: number;
   beats?: number[]; // beat timestamps
   bars?: number[]; // bar start timestamps
+  confidence?: number; // BPM検出の信頼度 (0-1)
   analyzedAt?: string;
 }
 
