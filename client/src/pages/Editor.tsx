@@ -593,6 +593,7 @@ const Editor: React.FC = () => {
         duration: undefined,
         format: format || mime,
         uploadedAt: new Date(),
+        originalFile: file, // 元のFileオブジェクトを保存（BPM検出用）
         metadata: {
           mimeType: mime
         }

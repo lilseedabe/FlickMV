@@ -56,17 +56,35 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
       let arrayBuffer: ArrayBuffer;
       
       if (audioFile.originalFile) {
-        // 原始Fileオブジェクトがある場合は直接使用
+        // 原始Fileオブジェクトがある場合は直接使用（最も信頼性が高い）
         console.log('📁 原始Fileオブジェクトを使用してBPM検出');
         arrayBuffer = await audioFile.originalFile.arrayBuffer();
-      } else {
-        // フォールバック: Blob URLを使用
+      } else if (audioFile.url.startsWith('blob:')) {
+        // Blob URLの場合はフォールバック
         console.log('🌐 Blob URLを使用してBPM検出');
-        const response = await fetch(audioFile.url);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        try {
+          const response = await fetch(audioFile.url);
+          if (!response.ok) {
+            throw new Error(`Blob URLの読み込みに失敗: ${response.status}`);
+          }
+          arrayBuffer = await response.arrayBuffer();
+        } catch (fetchError) {
+          console.error('Blob URLの取得に失敗:', fetchError);
+          throw new Error('音声ファイルの読み込みに失敗しました。ファイルを再アップロードしてください。');
         }
-        arrayBuffer = await response.arrayBuffer();
+      } else {
+        // 通常のURLの場合
+        console.log('🌐 通常のURLを使用してBPM検出');
+        try {
+          const response = await fetch(audioFile.url);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          arrayBuffer = await response.arrayBuffer();
+        } catch (fetchError) {
+          console.error('ファイルの取得に失敗:', fetchError);
+          throw new Error('音声ファイルの読み込みに失敗しました。ネットワーク接続を確認してください。');
+        }
       }
       
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -198,7 +216,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
           </div>
 
           {/* プレビュー再生ボタン */}
-          {audioBuffer && (
+          {(audioBuffer || audioFile.originalFile) && (
             <button
               onClick={togglePlayback}
               className="flex items-center space-x-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm transition-all"
