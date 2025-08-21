@@ -194,10 +194,26 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
     
     // 新しい音楽を再生
     const audio = new Audio(file.url);
+    audio.volume = 0.5; // 音量を50%に設定
     
-    audio.addEventListener('loadeddata', () => {
-      console.log(`🎵 音楽再生開始: ${file.name}`);
-    });
+    // ユーザーインタラクションによる再生のため、先にイベントリスナーを設定
+    const playPromise = () => {
+      return new Promise<void>((resolve, reject) => {
+        audio.addEventListener('canplay', () => {
+          audio.play().then(() => {
+            setCurrentlyPlaying(file.id);
+            setAudioRef(audio);
+            console.log(`🎵 音楽再生開始: ${file.name}`);
+            resolve();
+          }).catch(reject);
+        }, { once: true });
+        
+        audio.addEventListener('error', reject, { once: true });
+        
+        // 音楽ファイルの読み込み開始
+        audio.load();
+      });
+    };
     
     audio.addEventListener('ended', () => {
       setCurrentlyPlaying(null);
@@ -209,15 +225,14 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
       console.error(`❌ 音楽再生エラー: ${file.name}`, e);
       setCurrentlyPlaying(null);
       setAudioRef(null);
-      alert('音楽ファイルの再生に失敗しました。');
+      alert('音楽ファイルの再生に失敗しました。ファイル形式をご確認ください。');
     });
     
-    audio.play().then(() => {
-      setCurrentlyPlaying(file.id);
-      setAudioRef(audio);
-    }).catch((error) => {
+    // 再生を試行
+    playPromise().catch((error) => {
       console.error('Audio playback failed:', error);
-      alert('音楽ファイルの再生に失敗しました。ブラウザの自動再生設定を確認してください。');
+      // よりユーザーフレンドリーなメッセージ
+      alert('音楽の再生を開始できませんでした。\n\n解決方法：\n1. ページを一度クリックしてから再度お試しください\n2. ブラウザの音声設定を確認してください\n3. ファイル形式（MP3, WAV等）をご確認ください');
     });
   }, [currentlyPlaying, audioRef]);
   

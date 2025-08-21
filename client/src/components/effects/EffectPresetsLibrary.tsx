@@ -130,9 +130,9 @@ const EffectPresetsLibrary: React.FC<EffectPresetsLibraryProps> = ({
   };
 
   return (
-    <div className={`bg-dark-800 rounded-lg border border-dark-600 ${className}`}>
+    <div className={`bg-dark-800 rounded-lg border border-dark-600 flex flex-col h-full ${className}`}>
       {/* ヘッダー */}
-      <div className="p-4 border-b border-dark-700">
+      <div className="p-4 border-b border-dark-700 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
@@ -200,159 +200,161 @@ const EffectPresetsLibrary: React.FC<EffectPresetsLibraryProps> = ({
       </div>
 
       {/* プリセット一覧 */}
-      <div className="p-4 flex-1 overflow-y-auto max-h-96">
-        {filteredPresets.length === 0 ? (
-          <div className="text-center py-8">
-            <Filter className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-            <p className="text-gray-400">条件に一致するプリセットが見つかりません</p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategory('all');
-                setSelectedDifficulty('all');
-              }}
-              className="mt-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
-            >
-              フィルターをリセット
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            {filteredPresets.map((preset) => {
-              const isApplied = appliedPresets.has(preset.id);
-              const isPreviewing = previewingPreset === preset.id;
-              const categoryInfo = PRESET_CATEGORIES[preset.category];
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-dark-600 scrollbar-track-dark-800">
+          {filteredPresets.length === 0 ? (
+            <div className="text-center py-8">
+              <Filter className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+              <p className="text-gray-400">条件に一致するプリセットが見つかりません</p>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('all');
+                  setSelectedDifficulty('all');
+                }}
+                className="mt-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                フィルターをリセット
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {filteredPresets.map((preset) => {
+                const isApplied = appliedPresets.has(preset.id);
+                const isPreviewing = previewingPreset === preset.id;
+                const categoryInfo = PRESET_CATEGORIES[preset.category];
 
-              return (
-                <motion.div
-                  key={preset.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`bg-dark-700 rounded-lg border transition-all ${
-                    isPreviewing
-                      ? 'border-purple-400 bg-purple-500/10'
-                      : isApplied
-                      ? 'border-green-500 bg-green-500/10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start space-x-3 flex-1 min-w-0">
-                        <div 
-                          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ 
-                            backgroundColor: `${categoryInfo.color}20`, 
-                            color: categoryInfo.color 
-                          }}
-                        >
-                          {getCategoryIcon(preset.category)}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h4 className="text-sm font-medium text-white truncate">
-                              {preset.name}
-                            </h4>
-                            {isApplied && (
-                              <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
-                            )}
+                return (
+                  <motion.div
+                    key={preset.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`bg-dark-700 rounded-lg border transition-all ${
+                      isPreviewing
+                        ? 'border-purple-400 bg-purple-500/10'
+                        : isApplied
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-dark-600 hover:border-dark-500'
+                    }`}
+                  >
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-start space-x-3 flex-1 min-w-0">
+                          <div 
+                            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ 
+                              backgroundColor: `${categoryInfo.color}20`, 
+                              color: categoryInfo.color 
+                            }}
+                          >
+                            {getCategoryIcon(preset.category)}
                           </div>
-                          <p className="text-xs text-gray-400 mb-2 line-clamp-2">
-                            {preset.description}
-                          </p>
                           
-                          <div className="flex items-center space-x-2">
-                            <span 
-                              className={`text-xs px-2 py-1 rounded border ${getDifficultyColor(preset.difficulty)}`}
-                            >
-                              {preset.difficulty === 'beginner' ? '初級' : 
-                               preset.difficulty === 'intermediate' ? '中級' : '上級'}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <h4 className="text-sm font-medium text-white truncate">
+                                {preset.name}
+                              </h4>
+                              {isApplied && (
+                                <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400 mb-2 line-clamp-2">
+                              {preset.description}
+                            </p>
                             
-                            <span className="text-xs text-gray-500">
-                              {preset.effects.length} エフェクト
-                            </span>
-                            
-                            {preset.duration && (
-                              <span className="text-xs text-gray-500">
-                                {preset.duration}秒
+                            <div className="flex items-center space-x-2">
+                              <span 
+                                className={`text-xs px-2 py-1 rounded border ${getDifficultyColor(preset.difficulty)}`}
+                              >
+                                {preset.difficulty === 'beginner' ? '初級' : 
+                                 preset.difficulty === 'intermediate' ? '中級' : '上級'}
                               </span>
-                            )}
+                              
+                              <span className="text-xs text-gray-500">
+                                {preset.effects.length} エフェクト
+                              </span>
+                              
+                              {preset.duration && (
+                                <span className="text-xs text-gray-500">
+                                  {preset.duration}秒
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* タグ */}
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {preset.tags.slice(0, 3).map((tag, index) => (
-                        <span 
-                          key={index}
-                          className="text-xs bg-dark-600 text-gray-300 px-2 py-1 rounded"
+                      {/* タグ */}
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {preset.tags.slice(0, 3).map((tag, index) => (
+                          <span 
+                            key={index}
+                            className="text-xs bg-dark-600 text-gray-300 px-2 py-1 rounded"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                        {preset.tags.length > 3 && (
+                          <span className="text-xs text-gray-500">
+                            +{preset.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* アクションボタン */}
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handlePreviewPreset(preset)}
+                          disabled={!selectedClip || isPreviewing}
+                          className="flex items-center space-x-1 flex-1 bg-dark-600 hover:bg-dark-500 disabled:bg-dark-800 disabled:cursor-not-allowed text-white px-3 py-2 rounded text-sm transition-all"
                         >
-                          #{tag}
-                        </span>
-                      ))}
-                      {preset.tags.length > 3 && (
-                        <span className="text-xs text-gray-500">
-                          +{preset.tags.length - 3}
-                        </span>
-                      )}
+                          {isPreviewing ? (
+                            <>
+                              <EyeOff className="w-3 h-3" />
+                              <span>プレビュー中...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3 h-3" />
+                              <span>プレビュー</span>
+                            </>
+                          )}
+                        </button>
+                        
+                        <button
+                          onClick={() => handleApplyPreset(preset)}
+                          disabled={!selectedClip || isApplied}
+                          className={`flex items-center space-x-1 flex-1 px-3 py-2 rounded text-sm font-medium transition-all ${
+                            isApplied
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-not-allowed'
+                              : 'bg-purple-500 hover:bg-purple-600 disabled:bg-dark-800 disabled:cursor-not-allowed text-white'
+                          }`}
+                        >
+                          {isApplied ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>適用済み</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-3 h-3" />
+                              <span>適用</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
-
-                    {/* アクションボタン */}
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handlePreviewPreset(preset)}
-                        disabled={!selectedClip || isPreviewing}
-                        className="flex items-center space-x-1 flex-1 bg-dark-600 hover:bg-dark-500 disabled:bg-dark-800 disabled:cursor-not-allowed text-white px-3 py-2 rounded text-sm transition-all"
-                      >
-                        {isPreviewing ? (
-                          <>
-                            <EyeOff className="w-3 h-3" />
-                            <span>プレビュー中...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="w-3 h-3" />
-                            <span>プレビュー</span>
-                          </>
-                        )}
-                      </button>
-                      
-                      <button
-                        onClick={() => handleApplyPreset(preset)}
-                        disabled={!selectedClip || isApplied}
-                        className={`flex items-center space-x-1 flex-1 px-3 py-2 rounded text-sm font-medium transition-all ${
-                          isApplied
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-not-allowed'
-                            : 'bg-purple-500 hover:bg-purple-600 disabled:bg-dark-800 disabled:cursor-not-allowed text-white'
-                        }`}
-                      >
-                        {isApplied ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            <span>適用済み</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3 h-3" />
-                            <span>適用</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* フッター統計 */}
-      <div className="border-t border-dark-700 p-4">
+      <div className="border-t border-dark-700 p-4 flex-shrink-0">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <div className="text-lg font-bold text-white">{EFFECT_PRESETS.length}</div>

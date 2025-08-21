@@ -9,6 +9,8 @@ import EnhancedAudioTimeline from '../components/timeline/EnhancedAudioTimeline'
 import PlaybackControls from '../components/editor/PlaybackControls';
 import AudioAnalysis from '../components/AudioAnalysis/AudioAnalysis';
 import EffectPresetsLibrary from '../components/effects/EffectPresetsLibrary';
+import BPMDetectorComponent from '../components/audio/BPMDetector';
+import RightPanel from '../components/panels/RightPanel';
 import { ExportPanel, ExportProgress } from '../components/export';
 
 // Context
@@ -370,8 +372,7 @@ const Editor: React.FC = () => {
     }
   });
 
-  // エフェクトプリセット関連
-  const [showEffectPresets, setShowEffectPresets] = useState(false);
+  // エフェクトプリセット関連は削除（右カラムに移動のため）
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1118,22 +1119,10 @@ const Editor: React.FC = () => {
                     <Music className="w-3 h-3" />
                     <span>音声波形</span>
                   </button>
-                  <button
-                    onClick={() => setShowEffectPresets(!showEffectPresets)}
-                    className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-all ${
-                      showEffectPresets 
-                        ? 'bg-purple-500 text-white' 
-                        : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
-                    }`}
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>エフェクト</span>
-                  </button>
                 </div>
                 <div className="text-xs text-gray-400">
                   高さ: {timelineHeight}px | 長さ: {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}
                   {showEnhancedAudio && ' | 音声波形表示中'}
-                  {showEffectPresets && ' | エフェクト表示中'}
                 </div>
               </div>
             </div>
@@ -1142,8 +1131,7 @@ const Editor: React.FC = () => {
               <div className="flex h-full">
                 {/* メインタイムライン */}
                 <div className={`transition-all duration-300 ${
-                  showEnhancedAudio && showEffectPresets ? 'w-1/2' :
-                  showEnhancedAudio || showEffectPresets ? 'w-2/3' : 'w-full'
+                  showEnhancedAudio ? 'w-2/3' : 'w-full'
                 }`}>
                   <Timeline
                     timeline={project.timeline}
@@ -1158,9 +1146,7 @@ const Editor: React.FC = () => {
                 
                 {/* Enhanced Audio Timeline */}
                 {showEnhancedAudio && (
-                  <div className={`border-l border-dark-700 transition-all duration-300 ${
-                    showEffectPresets ? 'w-1/4' : 'w-1/3'
-                  }`}>
+                  <div className="w-1/3 border-l border-dark-700 transition-all duration-300">
                     <EnhancedAudioTimeline
                       timeline={project.timeline}
                       onTimelineUpdate={(timeline) => 
@@ -1172,26 +1158,12 @@ const Editor: React.FC = () => {
                     />
                   </div>
                 )}
-                
-                {/* エフェクトプリセット */}
-                {showEffectPresets && (
-                  <div className={`border-l border-dark-700 transition-all duration-300 ${
-                    showEnhancedAudio ? 'w-1/4' : 'w-1/3'
-                  }`}>
-                    <EffectPresetsLibrary
-                      selectedClip={selectedClip}
-                      onApplyPreset={handleApplyPreset}
-                      onPreviewPreset={handlePreviewPreset}
-                      className="h-full"
-                    />
-                  </div>
-                )}
               </div>
             </div>
           </motion.div>
         </div>
 
-        {/* Right Panel - プレビューウィンドウ管理復活 */}
+        {/* Right Panel */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ 
@@ -1220,144 +1192,18 @@ const Editor: React.FC = () => {
           )}
 
           {!isRightPanelCollapsed && (
-            <>
-              <div className="p-4 border-b border-dark-700">
-                <h2 className="text-lg font-semibold flex items-center space-x-2">
-                  <Settings className="w-5 h-5 text-purple-400" />
-                  <span>プロパティ</span>
-                </h2>
-              </div>
-              
-              <div className="flex-1 overflow-auto p-4">
-                {/* Preview Windows Management - 復活 */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium mb-3">プレビューウィンドウ</h3>
-                  <div className="space-y-2">
-                    {Object.entries(VIDEO_RESOLUTIONS).map(([key, resolution]) => {
-                      const Icon = resolution.icon as any;
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => createPreviewWindow(key as Resolution)}
-                          className="w-full bg-dark-700 hover:bg-dark-600 text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between"
-                        >
-                          <span className="flex items-center gap-2">
-                            <Icon className="w-4 h-4" />
-                            {resolution.label}
-                          </span>
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Active Windows - 復活 */}
-                {previewWindows.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium mb-3">アクティブウィンドウ</h3>
-                    <div className="space-y-2">
-                      {previewWindows.map((windowId, index) => (
-                        <div
-                          key={windowId}
-                          className="flex items-center justify-between bg-dark-700 px-3 py-2 rounded-lg"
-                        >
-                          <span className="text-sm text-gray-300">プレビュー {index + 1}</span>
-                          <button
-                            onClick={() => closePreviewWindow(windowId)}
-                            className="bg-red-500 hover:bg-red-600 text-white p-1 rounded"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Duration Info */}
-                <div className="mb-6 bg-dark-700 rounded-lg p-4">
-                  <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-                    <Music className="w-4 h-4 text-green-400" />
-                    プロジェクト情報
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">現在の長さ:</span>
-                      <span className="text-white font-medium">
-                        {Math.floor(project.timeline.duration / 60)}:{(project.timeline.duration % 60).toFixed(0).padStart(2, '0')}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-2">
-                      💡 音楽ファイルをアップロードすると、プロジェクトの長さが自動的に調整されます
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Settings */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">解像度</label>
-                    <select 
-                      value={videoResolution}
-                      onChange={(e) => handleResolutionChange(e.target.value as Resolution)}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm"
-                    >
-                      {Object.entries(VIDEO_RESOLUTIONS).map(([key, resolution]) => (
-                        <option key={key} value={key}>
-                          {resolution.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">フレームレート</label>
-                    <select className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm">
-                      <option>30 FPS</option>
-                      <option>60 FPS</option>
-                      <option>24 FPS</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">プロジェクト時間</label>
-                    <input 
-                      type="number"
-                      min="60"
-                      max="600"
-                      value={project.timeline.duration}
-                      onChange={(e) => {
-                        const newDuration = parseInt(e.target.value) || 60;
-                        setProject(prev => ({
-                          ...prev,
-                          settings: {
-                            ...prev.settings,
-                            duration: newDuration
-                          },
-                          timeline: {
-                            ...prev.timeline,
-                            duration: newDuration
-                          }
-                        }));
-                      }}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm"
-                      placeholder="秒数を入力"
-                    />
-                    <div className="text-xs text-gray-500 mt-1">
-                      60〜600秒の間で設定できます
-                    </div>
-                  </div>
-                </div>
-
-                {!selectedClip && (
-                  <div className="mt-8 text-center text-gray-400">
-                    <Info className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">クリップを選択してプロパティを編集</p>
-                  </div>
-                )}
-              </div>
-            </>
+            <RightPanel
+              project={project}
+              selectedClip={selectedClip}
+              videoResolution={videoResolution}
+              previewWindows={previewWindows}
+              onResolutionChange={handleResolutionChange}
+              onCreatePreviewWindow={createPreviewWindow}
+              onClosePreviewWindow={closePreviewWindow}
+              onProjectUpdate={setProject}
+              onApplyPreset={handleApplyPreset}
+              onPreviewPreset={handlePreviewPreset}
+            />
           )}
         </motion.div>
       </div>
