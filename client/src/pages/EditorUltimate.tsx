@@ -1153,6 +1153,7 @@ const EditorUltimate: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
         </motion.div>
 
         {/* Playback Controls */}
