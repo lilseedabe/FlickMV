@@ -58,7 +58,7 @@ const Preview: React.FC<PreviewProps> = ({
 
   const { width: previewWidth, height: previewHeight } = calculatePreviewSize();
 
-  // Load media files
+  // メディアファイル読み込み（改良版）
   const loadMediaFile = useCallback(async (mediaFile: any): Promise<HTMLImageElement | HTMLVideoElement | null> => {
     if (loadedMedia.has(mediaFile.id)) {
       return loadedMedia.get(mediaFile.id) || null;
@@ -70,12 +70,53 @@ const Preview: React.FC<PreviewProps> = ({
         img.crossOrigin = 'anonymous';
         
         return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('読み込みタイムアウト'));
+          }, 5000);
+          
           img.onload = () => {
+            clearTimeout(timeoutId);
             setLoadedMedia(prev => new Map(prev).set(mediaFile.id, img));
+            console.log('✅ 画像読み込み成功:', mediaFile.name);
             resolve(img);
           };
-          img.onerror = reject;
-          img.src = mediaFile.url;
+          
+          img.onerror = (error) => {
+            clearTimeout(timeoutId);
+            console.error('❌ 画像読み込み失敗:', mediaFile.name, error);
+            reject(error);
+          };
+          
+          // originalFileがある場合は新しいBlob URLを作成
+          if (mediaFile.originalFile && mediaFile.originalFile instanceof File) {
+            try {
+              const blobUrl = URL.createObjectURL(mediaFile.originalFile);
+              img.src = blobUrl;
+              
+              // 読み込み完了後にBlob URLをクリーンアップ
+              img.onload = () => {
+                clearTimeout(timeoutId);
+                URL.revokeObjectURL(blobUrl);
+                setLoadedMedia(prev => new Map(prev).set(mediaFile.id, img));
+                console.log('✅ 画像読み込み成功（originalFile）:', mediaFile.name);
+                resolve(img);
+              };
+              
+              img.onerror = (error) => {
+                clearTimeout(timeoutId);
+                URL.revokeObjectURL(blobUrl);
+                console.error('❌ 画像読み込み失敗（originalFile）:', mediaFile.name, error);
+                reject(error);
+              };
+            } catch (blobError) {
+              console.error('❌ Blob URL作成失敗:', mediaFile.name, blobError);
+              // フォールバックで元のURLを使用
+              img.src = mediaFile.url;
+            }
+          } else {
+            // originalFileがない場合は元のURLを使用
+            img.src = mediaFile.url;
+          }
         });
       } else if (mediaFile.type === 'video') {
         const video = document.createElement('video');
@@ -84,67 +125,149 @@ const Preview: React.FC<PreviewProps> = ({
         video.preload = 'metadata';
         
         return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('動画読み込みタイムアウト'));
+          }, 10000);
+          
           video.onloadedmetadata = () => {
+            clearTimeout(timeoutId);
             setLoadedMedia(prev => new Map(prev).set(mediaFile.id, video));
+            console.log('✅ 動画読み込み成功:', mediaFile.name);
             resolve(video);
           };
-          video.onerror = reject;
-          video.src = mediaFile.url;
+          
+          video.onerror = (error) => {
+            clearTimeout(timeoutId);
+            console.error('❌ 動画読み込み失敗:', mediaFile.name, error);
+            reject(error);
+          };
+          
+          // originalFileがある場合は新しいBlob URLを作成
+          if (mediaFile.originalFile && mediaFile.originalFile instanceof File) {
+            try {
+              const blobUrl = URL.createObjectURL(mediaFile.originalFile);
+              video.src = blobUrl;
+              
+              // 読み込み完了後にBlob URLをクリーンアップ
+              video.onloadedmetadata = () => {
+                clearTimeout(timeoutId);
+                setLoadedMedia(prev => new Map(prev).set(mediaFile.id, video));
+                console.log('✅ 動画読み込み成功（originalFile）:', mediaFile.name);
+                resolve(video);
+              };
+              
+              video.onerror = (error) => {
+                clearTimeout(timeoutId);
+                URL.revokeObjectURL(blobUrl);
+                console.error('❌ 動画読み込み失敗（originalFile）:', mediaFile.name, error);
+                reject(error);
+              };
+            } catch (blobError) {
+              console.error('❌ Blob URL作成失敗:', mediaFile.name, blobError);
+              // フォールバックで元のURLを使用
+              video.src = mediaFile.url;
+            }
+          } else {
+            // originalFileがない場合は元のURLを使用
+            video.src = mediaFile.url;
+          }
         });
       }
     } catch (error) {
-      console.error('Failed to load media:', error);
+      console.error('メディアファイル読み込みエラー:', mediaFile.name, error);
+      return null;
     }
 
     return null;
   }, [loadedMedia]);
 
-  // Render current frame
+  // 現在のフレームをレンダリング（改良版）
   useEffect(() => {
+    let isMounted = true;
+    
     const renderFrame = async () => {
+      if (!isMounted) return;
+      
       const canvas = canvasRef.current;
       if (!canvas) return;
       
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Set canvas size
+      // キャンバスサイズ設定
       canvas.width = resolution.width;
       canvas.height = resolution.height;
 
-      // Clear canvas
+      // キャンバスをクリア
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Find active clips at current time
+      // 現在時刻でアクティブなクリップを検索
       const activeClips = project.timeline.clips.filter(clip => 
         playheadPosition >= clip.startTime && 
         playheadPosition < clip.startTime + clip.duration
       );
 
-      // Sort clips by layer (bottom to top)
+      // レイヤー順でソート（下から上へ）
       activeClips.sort((a, b) => a.layer - b.layer);
 
-      // Render clips
+      // クリップをレンダリング
       for (const clip of activeClips) {
+        if (!isMounted) break;
+        
         const mediaFile = project.mediaLibrary.find(m => m.id === clip.mediaId);
         if (!mediaFile) continue;
 
         const clipProgress = (playheadPosition - clip.startTime) / clip.duration;
         
-        if (mediaFile.type === 'image') {
-          await renderImageClip(ctx, mediaFile, clip, clipProgress);
-        } else if (mediaFile.type === 'video') {
-          await renderVideoClip(ctx, mediaFile, clip, clipProgress);
+        try {
+          if (mediaFile.type === 'image') {
+            await renderImageClip(ctx, mediaFile, clip, clipProgress);
+          } else if (mediaFile.type === 'video') {
+            await renderVideoClip(ctx, mediaFile, clip, clipProgress);
+          }
+        } catch (error) {
+          console.error('クリップレンダリングエラー:', clip.id, error);
+          // エラー時のフォールバック表示
+          ctx.fillStyle = '#ff4444';
+          ctx.fillRect(0, 0, ctx.canvas.width / 4, ctx.canvas.height / 4);
+          ctx.fillStyle = 'white';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('エラー', ctx.canvas.width / 8, ctx.canvas.height / 8);
         }
       }
 
-      // Add text overlays
-      renderTextOverlays(ctx);
+      // テキストオーバーレイを追加
+      if (isMounted) {
+        renderTextOverlays(ctx);
+      }
     };
 
-    renderFrame();
+    renderFrame().catch(error => {
+      console.error('フレームレンダリングエラー:', error);
+    });
+    
+    return () => {
+      isMounted = false;
+    };
   }, [playheadPosition, project, resolution, loadedMedia]);
+  
+  // コンポーネントクリーンアップ
+  useEffect(() => {
+    return () => {
+      // ロードされたメディアのクリーンアップ
+      loadedMedia.forEach((media, id) => {
+        if (media instanceof HTMLVideoElement) {
+          media.pause();
+          media.src = '';
+          media.load();
+        }
+        console.log('🧹 メディアクリーンアップ:', id);
+      });
+      setLoadedMedia(new Map());
+    };
+  }, []);
 
   const renderImageClip = async (
     ctx: CanvasRenderingContext2D, 
@@ -155,10 +278,10 @@ const Preview: React.FC<PreviewProps> = ({
     try {
       const img = await loadMediaFile(mediaFile) as HTMLImageElement;
       
-      if (img && img.complete) {
+      if (img && img.complete && img.naturalWidth > 0) {
         ctx.save();
         
-        // Apply Ken Burns effect if enabled
+        // Ken Burnsエフェクトを適用（有効な場合）
         const panZoomEffect = clip.effects?.find((e: any) => e.type === 'pan_zoom');
         if (panZoomEffect && panZoomEffect.enabled) {
           const { zoom = 1.1, panX = 0, panY = 0 } = panZoomEffect.parameters;
@@ -169,10 +292,10 @@ const Preview: React.FC<PreviewProps> = ({
           ctx.scale(currentZoom, currentZoom);
           ctx.translate(currentPanX / currentZoom, currentPanY / currentZoom);
           
-          // Calculate scaling to fit canvas
+          // キャンバスにフィットするスケールを計算
           const scaleX = ctx.canvas.width / currentZoom / img.width;
           const scaleY = ctx.canvas.height / currentZoom / img.height;
-          const scale = Math.max(scaleX, scaleY); // Cover the canvas
+          const scale = Math.max(scaleX, scaleY); // キャンバスをカバー
           
           const drawWidth = img.width * scale;
           const drawHeight = img.height * scale;
@@ -181,7 +304,7 @@ const Preview: React.FC<PreviewProps> = ({
           
           ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
         } else {
-          // Standard fit
+          // 標準フィット
           const scaleX = ctx.canvas.width / img.width;
           const scaleY = ctx.canvas.height / img.height;
           const scale = Math.max(scaleX, scaleY);
@@ -196,27 +319,29 @@ const Preview: React.FC<PreviewProps> = ({
         
         ctx.restore();
       } else {
-        // Fallback: colored rectangle
+        // フォールバック: 色付き矩形
         const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'];
         const colorIndex = parseInt(clip.id.slice(-1)) % colors.length;
         ctx.fillStyle = colors[colorIndex];
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         
-        // Loading text
+        // 読み込みテキスト
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('画像を読み込み中...', ctx.canvas.width / 2, ctx.canvas.height / 2);
       }
     } catch (error) {
-      console.error('Error rendering image clip:', error);
-      // Error fallback
+      console.error('画像クリップレンダリングエラー:', mediaFile.name, error);
+      // エラーフォールバック
       ctx.fillStyle = '#ff4444';
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.fillStyle = 'white';
       ctx.font = '20px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('画像の読み込みに失敗', ctx.canvas.width / 2, ctx.canvas.height / 2);
+      ctx.fillText('画像の読み込みに失敗', ctx.canvas.width / 2, ctx.canvas.height / 2 - 10);
+      ctx.font = '14px Arial';
+      ctx.fillText(mediaFile.name || '不明なファイル', ctx.canvas.width / 2, ctx.canvas.height / 2 + 20);
     }
   };
 
@@ -229,12 +354,21 @@ const Preview: React.FC<PreviewProps> = ({
     try {
       const video = await loadMediaFile(mediaFile) as HTMLVideoElement;
       
-      if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA
-        // Set video time based on clip progress
-        const videoTime = (clip.startTime + progress * clip.duration) % video.duration;
-        video.currentTime = videoTime;
+      if (video && video.readyState >= 2 && video.videoWidth > 0) { // HAVE_CURRENT_DATA
+        // クリップの進行状況に基づいてビデオ時間を設定
+        const videoTime = (clip.trimStart || 0) + progress * clip.duration;
+        const normalizedTime = Math.min(videoTime, video.duration - 0.1);
         
-        // Draw video frame
+        // ビデオの現在時間を設定（安全に）
+        if (Math.abs(video.currentTime - normalizedTime) > 0.5) {
+          try {
+            video.currentTime = normalizedTime;
+          } catch (timeError) {
+            console.warn('ビデオ時間設定エラー:', timeError);
+          }
+        }
+        
+        // ビデオフレームを描画
         const scaleX = ctx.canvas.width / video.videoWidth;
         const scaleY = ctx.canvas.height / video.videoHeight;
         const scale = Math.max(scaleX, scaleY);
@@ -246,33 +380,52 @@ const Preview: React.FC<PreviewProps> = ({
         
         ctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
         
-        // Progress bar for video
+        // ビデオ用プログレスバー
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         const barWidth = ctx.canvas.width * progress;
         ctx.fillRect(0, ctx.canvas.height - 10, barWidth, 10);
+        
+        // ビデオ情報表示
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 10, 120, 60);
+        ctx.fillStyle = 'white';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Time: ${normalizedTime.toFixed(1)}s`, 15, 25);
+        ctx.fillText(`Duration: ${video.duration.toFixed(1)}s`, 15, 40);
+        ctx.fillText(`Progress: ${(progress * 100).toFixed(0)}%`, 15, 55);
       } else {
-        // Fallback: gradient
+        // フォールバック: グラデーション
         const gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, ctx.canvas.height);
         gradient.addColorStop(0, '#667eea');
         gradient.addColorStop(1, '#764ba2');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         
-        // Loading text
+        // 読み込みテキスト
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('動画を読み込み中...', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        
+        // ビデオ状態情報
+        if (video) {
+          ctx.font = '14px Arial';
+          ctx.fillText(`ReadyState: ${video.readyState}`, ctx.canvas.width / 2, ctx.canvas.height / 2 + 30);
+          ctx.fillText(`VideoWidth: ${video.videoWidth}`, ctx.canvas.width / 2, ctx.canvas.height / 2 + 50);
+        }
       }
     } catch (error) {
-      console.error('Error rendering video clip:', error);
-      // Error fallback
-      ctx.fillStyle = '#ff4444';
+      console.error('動画クリップレンダリングエラー:', mediaFile.name, error);
+      // エラーフォールバック
+      ctx.fillStyle = '#cc2936';
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.fillStyle = 'white';
       ctx.font = '20px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('動画の読み込みに失敗', ctx.canvas.width / 2, ctx.canvas.height / 2);
+      ctx.fillText('動画の読み込みに失敗', ctx.canvas.width / 2, ctx.canvas.height / 2 - 10);
+      ctx.font = '14px Arial';
+      ctx.fillText(mediaFile.name || '不明なファイル', ctx.canvas.width / 2, ctx.canvas.height / 2 + 20);
     }
   };
 
