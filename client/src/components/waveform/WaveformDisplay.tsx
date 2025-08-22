@@ -38,8 +38,13 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 波形データを生成 - 改良版
+  // 波形データを生成 - 改良版（キャッシュ付き）
   const generateWaveformData = useCallback(async (audioUrl: string): Promise<WaveformData | null> => {
+    // 既に波形データがある場合はスキップ
+    if (waveformData) {
+      return waveformData;
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -48,11 +53,9 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
       
       // AudioTrackにoriginalFileがあるかチェック
       if (audioTrack.originalFile) {
-        console.log('📁 波形生成: 原始Fileオブジェクトを使用');
         arrayBuffer = await audioTrack.originalFile.arrayBuffer();
       } else {
         // フォールバック: URLを使用
-        console.log('🌐 波形生成: URLを使用');
         const response = await fetch(audioUrl);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -99,12 +102,23 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     }
   }, [width, audioTrack]);
 
-  // 音声ファイルが変更された時に波形データを生成
+  // 音声ファイルが変更された時に波形データを生成（最適化版）
   useEffect(() => {
-    if (audioTrack.url) {
-      generateWaveformData(audioTrack.url).then(setWaveformData);
+    let isMounted = true;
+    
+    if (audioTrack.url && !waveformData) {
+      console.log('📁 波形生成: 原始Fileオブジェクトを使用');
+      generateWaveformData(audioTrack.url).then((data) => {
+        if (isMounted) {
+          setWaveformData(data);
+        }
+      });
     }
-  }, [audioTrack.url, generateWaveformData]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [audioTrack.url, audioTrack.id]); // generateWaveformDataを依存配列から除外
 
   // 波形を描画
   const drawWaveform = useCallback(() => {

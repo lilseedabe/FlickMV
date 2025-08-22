@@ -128,8 +128,13 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={skipBackward}
-          className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('⏪ 10秒戻るボタンがクリックされました');
+            skipBackward();
+          }}
+          className="p-2 hover:bg-dark-600 rounded-lg transition-colors control-btn"
           title="Skip back 10s"
         >
           <SkipBack className="w-5 h-5" />
@@ -138,8 +143,13 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={onPlayPause}
-          className="p-3 bg-primary-600 hover:bg-primary-700 rounded-full transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🎵 再生/一時停止ボタンがクリックされました:', isPlaying ? '一時停止' : '再生');
+            onPlayPause();
+          }}
+          className="p-3 bg-primary-600 hover:bg-primary-700 rounded-full transition-colors control-btn"
           title={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
@@ -152,8 +162,13 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={stop}
-          className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('⏹️ 停止ボタンがクリックされました');
+            stop();
+          }}
+          className="p-2 hover:bg-dark-600 rounded-lg transition-colors control-btn"
           title="Stop"
         >
           <Square className="w-5 h-5" />
@@ -162,8 +177,13 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={skipForward}
-          className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('⏩ 10秒進むボタンがクリックされました');
+            skipForward();
+          }}
+          className="p-2 hover:bg-dark-600 rounded-lg transition-colors control-btn"
           title="Skip forward 10s"
         >
           <SkipForward className="w-5 h-5" />

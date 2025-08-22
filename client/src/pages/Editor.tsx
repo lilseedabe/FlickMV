@@ -734,13 +734,28 @@ const Editor: React.FC = () => {
     setSelectedClip(clip);
   };
 
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
-  };
+  const handlePlayPause = useCallback(() => {
+    console.log('🎬 再生/一時停止状態変更:', isPlaying ? '一時停止中' : '再生中');
+    setIsPlaying(prev => {
+      const newState = !prev;
+      console.log('🔄 新しい再生状態:', newState);
+      return newState;
+    });
+  }, [isPlaying]);
 
-  const handleTimeUpdate = (time: number) => {
+  const handleTimeUpdate = useCallback((time: number) => {
+    console.log('⏱️ 時間更新:', time.toFixed(2), '秒');
     setPlayheadPosition(time);
-  };
+    
+    // タイムラインも同時に更新
+    setProject(prev => ({
+      ...prev,
+      timeline: {
+        ...prev.timeline,
+        playheadPosition: time
+      }
+    }));
+  }, []);
 
   const handleExport = () => {
     if (user.exportStats.remaining <= 0) {

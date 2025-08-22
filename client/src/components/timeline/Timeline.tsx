@@ -448,7 +448,23 @@ const Timeline: React.FC<TimelineProps> = ({
     const newStartTime = Math.max(0, pixelToTime(dropX));
 
     try {
-      const dragData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const transferData = e.dataTransfer.getData('application/json');
+      
+      // 空データのチェック
+      if (!transferData || transferData.trim() === '') {
+        console.warn('Empty drag data detected, ignoring drop');
+        return;
+      }
+      
+      // 安全なJSONパース
+      let dragData;
+      try {
+        dragData = JSON.parse(transferData);
+      } catch (parseError) {
+        console.error('JSON parse failed:', parseError);
+        console.log('Raw transfer data:', transferData);
+        return;
+      }
       
       if (dragData.type === 'media') {
         const newClip: TimelineClip = {

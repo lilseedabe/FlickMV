@@ -173,65 +173,92 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
     }
   };
 
-  // 音楽再生機能
+  // 音楽再生機能（改良版）
   const playAudio = useCallback((file: MediaFile) => {
-    if (!file.url || file.type !== 'audio') return;
-    
-    // 現在再生中の音楽がある場合は停止
-    if (audioRef) {
-      audioRef.pause();
-      audioRef.currentTime = 0;
-    }
-    
-    // 同じファイルを再度クリックした場合は停止
-    if (currentlyPlaying === file.id) {
-      setCurrentlyPlaying(null);
-      setAudioRef(null);
+    if (!file.url || file.type !== 'audio') {
+      console.warn('再生不可能なファイル:', file);
       return;
     }
     
-    // 新しい音楽を再生
-    const audio = new Audio(file.url);
-    audio.volume = 0.5; // 音量を50%に設定
-    
-    // ユーザーインタラクションによる再生のため、先にイベントリスナーを設定
-    const playPromise = () => {
-      return new Promise<void>((resolve, reject) => {
-        audio.addEventListener('canplay', () => {
-          audio.play().then(() => {
-            setCurrentlyPlaying(file.id);
-            setAudioRef(audio);
-            console.log(`🎵 音楽再生開始: ${file.name}`);
-            resolve();
-          }).catch(reject);
-        }, { once: true });
-        
-        audio.addEventListener('error', reject, { once: true });
-        
-        // 音楽ファイルの読み込み開始
-        audio.load();
+    try {
+      // 現在再生中の音楽がある場合は停止
+      if (audioRef) {
+        audioRef.pause();
+        audioRef.currentTime = 0;
+        if (audioRef.src.startsWith('blob:')) {
+          URL.revokeObjectURL(audioRef.src); // Blob URLをクリーンアップ
+        }
+      }
+      
+      // 同じファイルを再度クリックした場合は停止
+      if (currentlyPlaying === file.id) {
+        setCurrentlyPlaying(null);
+        setAudioRef(null);
+        return;
+      }
+      
+      // 新しい音楽を再生
+      let audioSrc: string;
+      
+      // originalFileがある場合はそれを使用、なければURLを使用
+      if (file.originalFile && file.originalFile instanceof File) {
+        audioSrc = URL.createObjectURL(file.originalFile);
+        console.log('📁 原始Fileオブジェクトで音楽再生:', file.name);
+      } else {
+        audioSrc = file.url;
+        console.log('🌐 URLで音楽再生:', file.name);
+      }
+      
+      const audio = new Audio();
+      audio.volume = 0.5; // 音量を 50%に設定
+      audio.preload = 'auto';
+      
+      // イベントリスナー設定
+      audio.addEventListener('loadeddata', () => {
+        console.log('📊 音楽データ読み込み完了:', file.name);
+        audio.play().then(() => {
+          setCurrentlyPlaying(file.id);
+          setAudioRef(audio);
+          console.log(`🎵 音楽再生開始: ${file.name}`);
+        }).catch((playError) => {
+          console.error('再生失敗:', playError);
+          if (audioSrc.startsWith('blob:')) {
+            URL.revokeObjectURL(audioSrc);
+          }
+          setCurrentlyPlaying(null);
+          setAudioRef(null);
+        });
+      }, { once: true });
+      
+      audio.addEventListener('ended', () => {
+        setCurrentlyPlaying(null);
+        setAudioRef(null);
+        if (audioSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(audioSrc);
+        }
+        console.log(`✅ 音楽再生終了: ${file.name}`);
       });
-    };
-    
-    audio.addEventListener('ended', () => {
+      
+      audio.addEventListener('error', (e) => {
+        console.error(`❌ 音楽再生エラー: ${file.name}`, e);
+        setCurrentlyPlaying(null);
+        setAudioRef(null);
+        if (audioSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(audioSrc);
+        }
+        // ユーザーにあまり頻繁にアラートを表示しない
+        console.warn('音楽ファイルの再生に失敗しました。ファイル形式をご確認ください。');
+      });
+      
+      // 音声ファイルを読み込み開始
+      audio.src = audioSrc;
+      audio.load();
+      
+    } catch (error) {
+      console.error('音楽再生初期化エラー:', error);
       setCurrentlyPlaying(null);
       setAudioRef(null);
-      console.log(`✅ 音楽再生終了: ${file.name}`);
-    });
-    
-    audio.addEventListener('error', (e) => {
-      console.error(`❌ 音楽再生エラー: ${file.name}`, e);
-      setCurrentlyPlaying(null);
-      setAudioRef(null);
-      alert('音楽ファイルの再生に失敗しました。ファイル形式をご確認ください。');
-    });
-    
-    // 再生を試行
-    playPromise().catch((error) => {
-      console.error('Audio playback failed:', error);
-      // よりユーザーフレンドリーなメッセージ
-      alert('音楽の再生を開始できませんでした。\n\n解決方法：\n1. ページを一度クリックしてから再度お試しください\n2. ブラウザの音声設定を確認してください\n3. ファイル形式（MP3, WAV等）をご確認ください');
-    });
+    }
   }, [currentlyPlaying, audioRef]);
   
   // コンポーネントのアンマウント時に音楽を停止
