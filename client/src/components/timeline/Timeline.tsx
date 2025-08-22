@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, 
@@ -16,10 +16,18 @@ import {
   ArrowRightLeft,
   Shuffle,
   Volume,
-  Activity
+  Activity,
+  Magnet,
+  Zap
 } from 'lucide-react';
 import type { Timeline as TimelineType, TimelineClip, AudioTrack, Transition } from '@/types';
 import WaveformDisplay from '../waveform/WaveformDisplay';
+
+// 新しい共通フックをインポート
+import {
+  useTimelineScale,
+  useTimelineDrag
+} from '../../hooks/timeline';
 
 interface TimelineProps {
   timeline: TimelineType;
@@ -29,6 +37,13 @@ interface TimelineProps {
   onTimelineUpdate: (timeline: TimelineType) => void;
 }
 
+/**
+ * 基本タイムライン (改良版)
+ * - requestAnimationFrameでドラッグスロットリング
+ * - Pointer Eventsに移行
+ * - 共通スケール管理
+ * - パフォーマンス最適化
+ */
 const Timeline: React.FC<TimelineProps> = ({
   timeline,
   playheadPosition,
@@ -37,21 +52,90 @@ const Timeline: React.FC<TimelineProps> = ({
   onTimelineUpdate
 }) => {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
+  const [draggedClip, setDraggedClip] = useState<TimelineClip | null>(null);
   const [copiedClip, setCopiedClip] = useState<TimelineClip | null>(null);
   const [isResizing, setIsResizing] = useState<{ clipId: string; edge: 'left' | 'right' } | null>(null);
   const [isAddingTransition, setIsAddingTransition] = useState<boolean>(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
+  const updateTimeoutRef = useRef<number | null>(null);
 
-  // Timeline scale (pixels per second)
-  const scale = 40 * zoom;
+  // ========== 共通フック使用 ==========
+  
+  // タイムラインスケール管理
+  const { pixelsPerSecond, timeToPixel, pixelToTime } = useTimelineScale({
+    zoom,
+    basePixelsPerSecond: 40,
+    minPixelsPerSecond: 10,
+    maxPixelsPerSecond: 160
+  });
+
+  // Pointer Events ベースドラッグ（クリップ移動用）
+  const {
+    dragState,
+    registerElement: registerDragElement,
+    isDragging: isDraggingClip
+  } = useTimelineDrag({
+    enabled: true,
+    throttle: true, // requestAnimationFrame でスロットリング
+    onDragStart: (e) => {
+      const target = e.target as HTMLElement;
+      const clipElement = target.closest('[data-clip-id]');
+      if (clipElement) {
+        const clipId = clipElement.getAttribute('data-clip-id');
+        const clip = timeline.clips.find(c => c.id === clipId);
+        if (clip) {
+          setDraggedClip(clip);
+          setSelectedClipId(clip.id);
+          onClipSelect(clip);
+        }
+      }
+    },
+    onDragMove: (e, deltaX, deltaY) => {
+      if (!draggedClip || !timelineRef.current) return;
+
+      const rect = timelineRef.current.getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+      const newTime = Math.max(0, pixelToTime(currentX));
+
+      // デバウンス付きで更新（パフォーマンス向上）
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+
+      updateTimeoutRef.current = window.setTimeout(() => {
+        const updatedClip: TimelineClip = {
+          ...draggedClip,
+          startTime: newTime,
+        };
+
+        const updatedClips = timeline.clips.map(clip =>
+          clip.id === draggedClip.id ? updatedClip : clip
+        );
+
+        const updatedTimeline = {
+          ...timeline,
+          clips: updatedClips
+        };
+
+        onTimelineUpdate(updatedTimeline);
+      }, 16); // ~60fps での更新
+    },
+    onDragEnd: () => {
+      setDraggedClip(null);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+    }
+  });
+
+  // レイアウト定数
   const trackHeight = 60;
   const audioTrackHeight = 40;
 
   // クリップ分割機能
-  const splitClipAtPlayhead = () => {
+  const splitClipAtPlayhead = useCallback(() => {
     if (!selectedClipId) {
       console.warn('No clip selected for splitting');
       return;
@@ -63,27 +147,21 @@ const Timeline: React.FC<TimelineProps> = ({
       return;
     }
 
-    // プレイヘッドがクリップの範囲内にあるかチェック
     const clipEndTime = selectedClip.startTime + selectedClip.duration;
     if (playheadPosition <= selectedClip.startTime || playheadPosition >= clipEndTime) {
       console.warn('Playhead is not within the selected clip');
       return;
     }
 
-    // 分割位置を計算
     const splitPosition = playheadPosition - selectedClip.startTime;
-    
-    // 新しいクリップID生成
     const newClipId = `${selectedClip.id}_split_${Date.now()}`;
     
-    // 元のクリップ（左側）
     const leftClip: TimelineClip = {
       ...selectedClip,
       duration: splitPosition,
       trimEnd: selectedClip.trimStart + splitPosition
     };
     
-    // 新しいクリップ（右側）
     const rightClip: TimelineClip = {
       ...selectedClip,
       id: newClipId,
@@ -92,7 +170,6 @@ const Timeline: React.FC<TimelineProps> = ({
       trimStart: selectedClip.trimStart + splitPosition
     };
 
-    // クリップリストを更新
     const updatedClips = timeline.clips.map(clip => 
       clip.id === selectedClipId ? leftClip : clip
     ).concat(rightClip);
@@ -104,10 +181,10 @@ const Timeline: React.FC<TimelineProps> = ({
     
     onTimelineUpdate(updatedTimeline);
     console.log(`✂️ Clip split: ${selectedClip.id} → ${leftClip.id} + ${rightClip.id}`);
-  };
+  }, [selectedClipId, timeline, playheadPosition, onTimelineUpdate]);
 
   // クリップコピー機能
-  const copySelectedClip = () => {
+  const copySelectedClip = useCallback(() => {
     if (!selectedClipId) {
       console.warn('No clip selected for copying');
       return;
@@ -121,21 +198,20 @@ const Timeline: React.FC<TimelineProps> = ({
 
     setCopiedClip(selectedClip);
     console.log(`📋 Clip copied: ${selectedClip.id}`);
-  };
+  }, [selectedClipId, timeline.clips]);
 
   // クリップペースト機能
-  const pasteClip = () => {
+  const pasteClip = useCallback(() => {
     if (!copiedClip) {
       console.warn('No clip in clipboard');
       return;
     }
 
-    // プレイヘッド位置に新しいクリップを配置
     const newClip: TimelineClip = {
       ...copiedClip,
       id: `${copiedClip.id}_copy_${Date.now()}`,
       startTime: playheadPosition,
-      layer: 0 // デフォルトで最初のレイヤーに配置
+      layer: 0
     };
 
     const updatedTimeline = {
@@ -147,14 +223,13 @@ const Timeline: React.FC<TimelineProps> = ({
     setSelectedClipId(newClip.id);
     onClipSelect(newClip);
     console.log(`📌 Clip pasted: ${newClip.id} at ${playheadPosition}s`);
-  };
+  }, [copiedClip, playheadPosition, timeline, onTimelineUpdate, onClipSelect]);
 
   // トランジション追加機能
-  const addTransitionBetweenClips = (clipId: string, transitionType: Transition['type'] = 'crossfade') => {
+  const addTransitionBetweenClips = useCallback((clipId: string, transitionType: Transition['type'] = 'crossfade') => {
     const clip = timeline.clips.find(c => c.id === clipId);
     if (!clip) return;
 
-    // 同じレイヤーの次のクリップを探す
     const nextClip = timeline.clips
       .filter(c => c.layer === clip.layer && c.startTime > clip.startTime)
       .sort((a, b) => a.startTime - b.startTime)[0];
@@ -164,9 +239,8 @@ const Timeline: React.FC<TimelineProps> = ({
       return;
     }
 
-    // クリップ間の距離を確認
     const gap = nextClip.startTime - (clip.startTime + clip.duration);
-    const transitionDuration = Math.min(1.0, Math.max(0.5, gap)); // 0.5秒から1秒の間
+    const transitionDuration = Math.min(1.0, Math.max(0.5, gap));
 
     if (gap < 0.1) {
       console.warn('Clips are too close for transition');
@@ -179,7 +253,6 @@ const Timeline: React.FC<TimelineProps> = ({
       parameters: getDefaultTransitionParameters(transitionType)
     };
 
-    // 現在のクリップのout transitionを追加
     const updatedClips = timeline.clips.map(c => {
       if (c.id === clipId) {
         return {
@@ -209,30 +282,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
     onTimelineUpdate(updatedTimeline);
     console.log(`🎬 Transition added: ${clip.id} → ${nextClip.id} (${transitionType})`);
-  };
-
-  // トランジション削除機能
-  const removeTransition = (clipId: string, direction: 'in' | 'out') => {
-    const updatedClips = timeline.clips.map(clip => {
-      if (clip.id === clipId) {
-        const newTransitions = { ...clip.transitions };
-        delete newTransitions[direction];
-        return {
-          ...clip,
-          transitions: Object.keys(newTransitions).length > 0 ? newTransitions : undefined
-        };
-      }
-      return clip;
-    });
-
-    const updatedTimeline = {
-      ...timeline,
-      clips: updatedClips
-    };
-
-    onTimelineUpdate(updatedTimeline);
-    console.log(`🗑️ Transition removed: ${clipId} (${direction})`);
-  };
+  }, [timeline, onTimelineUpdate]);
 
   // トランジションのデフォルトパラメータ
   const getDefaultTransitionParameters = (type: Transition['type']): Record<string, any> => {
@@ -250,14 +300,14 @@ const Timeline: React.FC<TimelineProps> = ({
     }
   };
 
-  // クリップリサイズ開始
-  const handleResizeStart = (clipId: string, edge: 'left' | 'right', e: React.MouseEvent) => {
+  // クリップリサイズ開始（改良版）
+  const handleResizeStart = useCallback((clipId: string, edge: 'left' | 'right', e: React.PointerEvent) => {
     e.stopPropagation();
     setIsResizing({ clipId, edge });
-  };
+  }, []);
 
-  // クリップリサイズ処理
-  const handleResize = (e: MouseEvent) => {
+  // クリップリサイズ処理（Pointer Events対応）
+  const handleResize = useCallback((e: PointerEvent) => {
     if (!isResizing || !timelineRef.current) return;
 
     const rect = timelineRef.current.getBoundingClientRect();
@@ -270,7 +320,6 @@ const Timeline: React.FC<TimelineProps> = ({
     let updatedClip: TimelineClip;
     
     if (isResizing.edge === 'left') {
-      // 左端をリサイズ：開始時間とトリム開始を変更
       const newStartTime = Math.max(0, Math.min(newTime, clipToResize.startTime + clipToResize.duration - 0.1));
       const timeDiff = newStartTime - clipToResize.startTime;
       
@@ -281,7 +330,6 @@ const Timeline: React.FC<TimelineProps> = ({
         trimStart: Math.max(0, clipToResize.trimStart + timeDiff)
       };
     } else {
-      // 右端をリサイズ：終了時間とトリム終了を変更
       const maxEndTime = clipToResize.trimEnd;
       const newDuration = Math.max(0.1, Math.min(newTime - clipToResize.startTime, maxEndTime - clipToResize.trimStart));
       
@@ -302,34 +350,37 @@ const Timeline: React.FC<TimelineProps> = ({
     };
     
     onTimelineUpdate(updatedTimeline);
-  };
+  }, [isResizing, timelineRef, pixelToTime, timeline, onTimelineUpdate]);
 
   // キーボードショートカット
-  const handleKeyDown = (e: KeyboardEvent) => {
-    // Ctrl/Cmd + C でコピー
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // フォーカスがinput等にある場合はスキップ
+    const activeElement = document.activeElement;
+    if (activeElement && (
+      activeElement.tagName === 'INPUT' ||
+      activeElement.tagName === 'TEXTAREA' ||
+      activeElement.getAttribute('contenteditable') === 'true'
+    )) {
+      return;
+    }
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
       e.preventDefault();
       copySelectedClip();
-    }
-    // Ctrl/Cmd + V でペースト
-    else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
       e.preventDefault();
       pasteClip();
-    }
-    // S で分割
-    else if (e.key === 's' || e.key === 'S') {
-      e.preventDefault();
-      splitClipAtPlayhead();
-    }
-    // Delete/Backspace で削除
-    else if (e.key === 'Delete' || e.key === 'Backspace') {
+    } else if (e.key === 's' || e.key === 'S') {
+      if (!(e.ctrlKey || e.metaKey)) { // Ctrl+S は保存なのでスキップ
+        e.preventDefault();
+        splitClipAtPlayhead();
+      }
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selectedClipId) {
         e.preventDefault();
         handleClipDelete(selectedClipId);
       }
-    }
-    // T でトランジション追加
-    else if (e.key === 't' || e.key === 'T') {
+    } else if (e.key === 't' || e.key === 'T') {
       e.preventDefault();
       if (selectedClipId) {
         setIsAddingTransition(true);
@@ -337,41 +388,51 @@ const Timeline: React.FC<TimelineProps> = ({
         setTimeout(() => setIsAddingTransition(false), 1000);
       }
     }
-  };
+  }, [copySelectedClip, pasteClip, splitClipAtPlayhead, selectedClipId, addTransitionBetweenClips]);
 
-  // イベントリスナーの追加
+  // イベントリスナーの管理
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (isResizing) {
         handleResize(e);
       }
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsResizing(null);
     };
 
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('pointermove', handlePointerMove);
+      document.addEventListener('pointerup', handlePointerUp);
       document.body.style.cursor = 'col-resize';
     }
 
     document.addEventListener('keydown', handleKeyDown);
     
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.cursor = '';
     };
-  }, [isResizing, selectedClipId, copiedClip, playheadPosition]);
+  }, [isResizing, handleResize, handleKeyDown]);
 
-  // Convert time to pixel position
-  const timeToPixel = (time: number) => time * scale;
-  
-  // Convert pixel position to time
-  const pixelToTime = (pixel: number) => pixel / scale;
+  // ドラッグ要素の登録
+  useEffect(() => {
+    if (timelineRef.current) {
+      registerDragElement(timelineRef.current);
+    }
+  }, [registerDragElement]);
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // 選択されたクリップの取得
   const selectedClip = selectedClipId ? timeline.clips.find(clip => clip.id === selectedClipId) : null;
@@ -379,33 +440,17 @@ const Timeline: React.FC<TimelineProps> = ({
     playheadPosition > selectedClip.startTime && 
     playheadPosition < selectedClip.startTime + selectedClip.duration;
 
-  // Handle clip drag and drop
-  const handleClipDragStart = (e: React.DragEvent, clip: TimelineClip) => {
-    setIsDragging(true);
-    const rect = e.currentTarget.getBoundingClientRect();
-    setDragOffset(e.clientX - rect.left);
-    e.dataTransfer.setData('application/json', JSON.stringify({
-      type: 'timeline-clip',
-      data: clip
-    }));
-  };
-
-  const handleClipDragEnd = () => {
-    setIsDragging(false);
-    setDragOffset(0);
-  };
-
-  const handleTrackDrop = (e: React.DragEvent, layer: number) => {
+  // ドロップ処理
+  const handleTrackDrop = useCallback((e: React.DragEvent, layer: number) => {
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
-    const dropX = e.clientX - rect.left - dragOffset;
+    const dropX = e.clientX - rect.left;
     const newStartTime = Math.max(0, pixelToTime(dropX));
 
     try {
       const dragData = JSON.parse(e.dataTransfer.getData('application/json'));
       
       if (dragData.type === 'media') {
-        // Add new clip from media library
         const newClip: TimelineClip = {
           id: `clip-${Date.now()}`,
           mediaId: dragData.data.id,
@@ -430,7 +475,6 @@ const Timeline: React.FC<TimelineProps> = ({
         };
         onTimelineUpdate(updatedTimeline);
       } else if (dragData.type === 'timeline-clip') {
-        // Move existing clip
         const updatedClips = timeline.clips.map(clip =>
           clip.id === dragData.data.id
             ? { ...clip, startTime: newStartTime, layer }
@@ -446,14 +490,14 @@ const Timeline: React.FC<TimelineProps> = ({
     } catch (error) {
       console.error('Failed to handle drop:', error);
     }
-  };
+  }, [timeline, onTimelineUpdate, pixelToTime]);
 
-  const handleClipSelect = (clip: TimelineClip) => {
+  const handleClipSelect = useCallback((clip: TimelineClip) => {
     setSelectedClipId(clip.id);
     onClipSelect(clip);
-  };
+  }, [onClipSelect]);
 
-  const handleClipDelete = (clipId: string) => {
+  const handleClipDelete = useCallback((clipId: string) => {
     const updatedClips = timeline.clips.filter(clip => clip.id !== clipId);
     const updatedTimeline = {
       ...timeline,
@@ -464,10 +508,10 @@ const Timeline: React.FC<TimelineProps> = ({
     if (selectedClipId === clipId) {
       setSelectedClipId(null);
     }
-  };
+  }, [timeline, onTimelineUpdate, selectedClipId]);
 
-  // Generate time markers
-  const generateTimeMarkers = () => {
+  // 時間マーカー生成
+  const generateTimeMarkers = useCallback(() => {
     const markers = [];
     const maxTime = Math.max(timeline.duration, 60);
     const interval = zoom < 0.5 ? 10 : zoom < 1 ? 5 : 1;
@@ -476,13 +520,13 @@ const Timeline: React.FC<TimelineProps> = ({
       markers.push(i);
     }
     return markers;
-  };
+  }, [timeline.duration, zoom]);
 
-  const formatTime = (seconds: number) => {
+  const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-dark-900">
@@ -494,6 +538,12 @@ const Timeline: React.FC<TimelineProps> = ({
             {selectedClip && (
               <div className="text-sm text-purple-400 bg-purple-500/20 px-2 py-1 rounded">
                 {selectedClip.id.slice(-8)} selected
+              </div>
+            )}
+            {isDraggingClip && (
+              <div className="text-sm text-yellow-400 bg-yellow-500/20 px-2 py-1 rounded flex items-center space-x-1">
+                <Zap className="w-3 h-3" />
+                <span>Dragging...</span>
               </div>
             )}
           </div>
@@ -518,7 +568,12 @@ const Timeline: React.FC<TimelineProps> = ({
             </button>
           </div>
           
-          {/* キーボードショートカット表示 */}
+          {/* 性能情報表示（開発用） */}
+          <div className="hidden lg:flex items-center space-x-3 text-xs text-gray-500">
+            <span>PPS: {pixelsPerSecond.toFixed(0)}</span>
+            <span>Width: {timeToPixel(timeline.duration).toFixed(0)}px</span>
+          </div>
+          
           <div className="hidden lg:flex items-center space-x-3 text-xs text-gray-400">
             <span>Shortcuts:</span>
             <div className="flex items-center space-x-1">
@@ -665,7 +720,6 @@ const Timeline: React.FC<TimelineProps> = ({
                 onDrop={(e) => handleTrackDrop(e, layerIndex)}
                 onDragOver={(e) => e.preventDefault()}
               >
-                {/* Track Background */}
                 <div className="absolute inset-0 bg-dark-850 hover:bg-dark-800 transition-colors" />
                 
                 {/* Clips on this layer */}
@@ -675,6 +729,7 @@ const Timeline: React.FC<TimelineProps> = ({
                     .map(clip => (
                       <motion.div
                         key={clip.id}
+                        data-clip-id={clip.id} // ドラッグ対象の特定用
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
@@ -682,7 +737,7 @@ const Timeline: React.FC<TimelineProps> = ({
                           selectedClipId === clip.id 
                             ? 'ring-2 ring-primary-400 border-primary-300 bg-primary-500/80' 
                             : 'border-gray-600 bg-blue-500/60 hover:bg-blue-500/80'
-                        }`}
+                        } ${isDraggingClip && draggedClip?.id === clip.id ? 'z-50' : ''}`}
                         style={{
                           left: timeToPixel(clip.startTime),
                           width: timeToPixel(clip.duration),
@@ -690,9 +745,6 @@ const Timeline: React.FC<TimelineProps> = ({
                           top: 4,
                           borderRadius: '6px'
                         }}
-                        draggable
-                        onDragStart={(e: any) => handleClipDragStart(e, clip)}
-                        onDragEnd={handleClipDragEnd}
                         onClick={() => handleClipSelect(clip)}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -700,7 +752,7 @@ const Timeline: React.FC<TimelineProps> = ({
                         {/* 左端リサイズハンドル */}
                         <div
                           className="absolute left-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
-                          onMouseDown={(e) => handleResizeStart(clip.id, 'left', e)}
+                          onPointerDown={(e) => handleResizeStart(clip.id, 'left', e)}
                           title="Resize clip start"
                         />
                         
@@ -718,7 +770,6 @@ const Timeline: React.FC<TimelineProps> = ({
                             )}
                           </div>
                           
-                          {/* 削除ボタン */}
                           <button
                             className="p-1 hover:bg-red-500 rounded opacity-0 group-hover:opacity-100 transition-all"
                             onClick={(e) => {
@@ -734,9 +785,14 @@ const Timeline: React.FC<TimelineProps> = ({
                         {/* 右端リサイズハンドル */}
                         <div
                           className="absolute right-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
-                          onMouseDown={(e) => handleResizeStart(clip.id, 'right', e)}
+                          onPointerDown={(e) => handleResizeStart(clip.id, 'right', e)}
                           title="Resize clip end"
                         />
+                        
+                        {/* ドラッグ中の視覚的フィードバック */}
+                        {isDraggingClip && draggedClip?.id === clip.id && (
+                          <div className="absolute inset-0 border-2 border-yellow-400 rounded-md pointer-events-none animate-pulse" />
+                        )}
                         
                         {/* トリムインジケーター */}
                         {(clip.trimStart > 0 || clip.trimEnd < (clip.trimEnd || clip.duration)) && (
@@ -769,14 +825,12 @@ const Timeline: React.FC<TimelineProps> = ({
           {/* Audio Tracks */}
           {timeline.audioTracks.map((audioTrack, index) => (
             <div key={audioTrack.id} className="flex">
-              {/* Track Label */}
               <div className="w-24 bg-dark-800 border-r border-dark-700 flex items-center justify-center text-sm text-dark-400 font-medium"
                    style={{ height: audioTrackHeight }}>
                 <Volume2 className="w-4 h-4 mr-1" />
                 Audio {index + 1}
               </div>
               
-              {/* Track Content */}
               <div
                 className="flex-1 relative border-b border-dark-700"
                 style={{ 
@@ -786,7 +840,6 @@ const Timeline: React.FC<TimelineProps> = ({
               >
                 <div className="absolute inset-0 bg-dark-850" />
                 
-                {/* Audio Waveform Display */}
                 <div
                   className="absolute"
                   style={{
@@ -808,7 +861,6 @@ const Timeline: React.FC<TimelineProps> = ({
                       showBeats={true}
                       className="rounded border border-cyan-500/30 bg-cyan-500/10"
                       onWaveformClick={(time) => {
-                        // プレイヘッドを波形クリック位置に移動する処理
                         console.log('Waveform clicked at time:', time);
                       }}
                     />
@@ -827,7 +879,6 @@ const Timeline: React.FC<TimelineProps> = ({
                   )}
                 </div>
 
-                {/* Beat Markers (if no waveform URL) */}
                 {!audioTrack.url && audioTrack.beats && audioTrack.beats.map((beatTime, beatIndex) => (
                   <div
                     key={beatIndex}

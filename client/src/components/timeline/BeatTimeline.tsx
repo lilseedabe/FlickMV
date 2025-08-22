@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Magnet, Settings, Info, ChevronDown, Play, Target } from 'lucide-react';
+import { Magnet, Settings, Info, ChevronDown, Play, Target, Zap, AlertCircle } from 'lucide-react';
 
 import {
   BeatTimelineProps,
@@ -10,9 +10,21 @@ import {
   Timeline,
 } from '../../types';
 
+// 新しい共通フックをインポート
+import {
+  useTimelineScale,
+  useTimelineSnap,
+  useTimelineDrag,
+  useSnapControl
+} from '../../hooks/timeline';
+
 /**
- * ビートスナップ機能付き拡張タイムライン
- * 初心者にもわかりやすいビート同期機能を提供
+ * ビートスナップ機能付き拡張タイムライン (改良版)
+ * - quantizeStrengthが実際のスナップ計算に反映
+ * - スナップ閾値が拍長ベース + ピクセル換算
+ * - ドラッグ更新がrequestAnimationFrameでスロットリング
+ * - Pointer Eventsに移行
+ * - Magneticモード（M キー）でスナップのオン/オフ切り替え
  */
 const BeatTimeline: React.FC<BeatTimelineProps> = ({
   timeline,
@@ -28,165 +40,164 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
   showBarMarkers = true,
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [draggedClip, setDraggedClip] = useState<TimelineClip | null>(null);
   const [snapPreview, setSnapPreview] = useState<number | null>(null);
   const [showGridSettings, setShowGridSettings] = useState(false);
-  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 
-  // タイムライン描画の基本設定
-  const pixelsPerSecond = Math.max(10, 50 * zoom);
-  const timelineWidth = Math.max(800, timeline.duration * pixelsPerSecond);
-  const trackHeight = 80;
-  const headerHeight = 60;
+  // ========== 新しい共通フック使用 ==========
+  
+  // 1. タイムラインスケール管理
+  const { pixelsPerSecond, timeToPixel, pixelToTime } = useTimelineScale({
+    zoom,
+    basePixelsPerSecond: 50,
+    minPixelsPerSecond: 10,
+    maxPixelsPerSecond: 200
+  });
 
-  // ビートマーカーの計算
-  const beatMarkers = useMemo(() => {
-    if (!bpmAnalysis || !showBeatMarkers) return [];
-    return bpmAnalysis.beatTimes.map((time) => ({
-      time,
-      x: time * pixelsPerSecond,
-      type: 'beat' as const,
-    }));
-  }, [bpmAnalysis, pixelsPerSecond, showBeatMarkers]);
+  // 2. スナップ制御（Magneticモード付き）
+  const {
+    beatGrid: effectiveBeatGrid,
+    magneticMode,
+    isSnapEnabled,
+    updateBeatGrid,
+    toggleSnap,
+    toggleMagneticMode,
+    setQuantizeStrength,
+    presets,
+    statusText
+  } = useSnapControl({
+    initialBeatGrid: beatGrid,
+    onBeatGridChange,
+    enableShortcuts: true
+  });
 
-  // 小節マーカーの計算
-  const barMarkers = useMemo(() => {
-    if (!bpmAnalysis || !showBarMarkers) return [];
-    return bpmAnalysis.bars.map((time) => ({
-      time,
-      x: time * pixelsPerSecond,
-      type: 'bar' as const,
-    }));
-  }, [bpmAnalysis, pixelsPerSecond, showBarMarkers]);
+  // 3. 高性能スナップ計算
+  const {
+    snapPoints: visualSnapPoints,
+    findNearestSnapPoint,
+    getSnapPreview,
+    calculateSnapDistance,
+    isEnabled: snapEnabled
+  } = useTimelineSnap({
+    enabled: isSnapEnabled,
+    bpmAnalysis,
+    beatGrid: effectiveBeatGrid,
+    pixelsPerSecond,
+    timelineDuration: timeline.duration,
+    customSnapPoints: []
+  });
 
-  // スナップポイントの計算
-  const snapPoints = useMemo(() => {
-    const points: number[] = [];
-
-    if (beatGrid.snapToBeat && bpmAnalysis) {
-      points.push(...bpmAnalysis.beatTimes);
-    }
-
-    if (beatGrid.snapToBar && bpmAnalysis) {
-      points.push(...bpmAnalysis.bars);
-    }
-
-    // サブディビジョンの追加
-    if (beatGrid.subdivisions > 1 && bpmAnalysis) {
-      const subdivisionInterval = 60 / (bpmAnalysis.bpm * beatGrid.subdivisions);
-      for (let t = 0; t <= timeline.duration; t += subdivisionInterval) {
-        points.push(Number(t.toFixed(4)));
-      }
-    }
-
-    return points.sort((a, b) => a - b);
-  }, [beatGrid, bpmAnalysis, timeline.duration]);
-
-  // 最も近いスナップポイントを見つける
-  const findNearestSnapPoint = useCallback(
-    (time: number): number => {
-      if (!beatGrid.enabled || snapPoints.length === 0) return clampTime(time, 0, timeline.duration);
-
-      const snapDistance = 0.1; // 0.1秒以内でスナップ
-      let nearestPoint = time;
-      let minDistance = snapDistance;
-
-      for (let i = 0; i < snapPoints.length; i++) {
-        const point = snapPoints[i];
-        const distance = Math.abs(time - point);
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearestPoint = point;
+  // 4. Pointer Events ベースドラッグ
+  const {
+    dragState,
+    registerElement,
+    isDragging
+  } = useTimelineDrag({
+    enabled: true,
+    throttle: true, // requestAnimationFrame でスロットリング
+    onDragStart: (e) => {
+      // ドラッグ対象のクリップを特定
+      const target = e.target as HTMLElement;
+      const clipElement = target.closest('[data-clip-id]');
+      if (clipElement) {
+        const clipId = clipElement.getAttribute('data-clip-id');
+        const clip = timeline.clips.find(c => c.id === clipId);
+        if (clip) {
+          setDraggedClip(clip);
+          setSelectedClipId(clip.id);
+          onClipSelect(clip);
         }
       }
-
-      return clampTime(nearestPoint, 0, timeline.duration);
     },
-    [beatGrid.enabled, snapPoints, timeline.duration],
-  );
-
-  // クリップのドラッグ処理
-  const handleClipMouseDown = (e: React.MouseEvent, clip: TimelineClip) => {
-    e.preventDefault();
-    setIsDragging(true);
-    setDraggedClip(clip);
-    setSelectedClipId(clip.id);
-    onClipSelect(clip);
-  };
-
-  // マウス移動時の処理
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging || !draggedClip || !timelineRef.current) return;
+    onDragMove: (e, deltaX, deltaY) => {
+      if (!draggedClip || !timelineRef.current) return;
 
       const rect = timelineRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const rawTime = x / pixelsPerSecond;
+      const currentX = e.clientX - rect.left;
+      const rawTime = pixelToTime(currentX);
 
-      // スナップ処理
-      const snappedTime = findNearestSnapPoint(rawTime);
-      setSnapPreview(snappedTime);
+      // スナップ処理（quantizeStrength と BPM に基づく適応的閾値）
+      const snapResult = findNearestSnapPoint(rawTime);
+      const snappedTime = Math.max(0, snapResult.snappedTime);
 
-      // クリップ位置の更新
+      // スナップ予告を更新
+      setSnapPreview(snapResult.wasSnapped ? snappedTime : null);
+
+      // クリップ位置の更新（requestAnimationFrame でスロットリング済み）
       const updatedClip: TimelineClip = {
         ...draggedClip,
-        startTime: Math.max(0, snappedTime),
+        startTime: snappedTime,
       };
 
       const updatedTimeline: Timeline = {
         ...timeline,
-        clips: timeline.clips.map((clip) => (clip.id === draggedClip.id ? updatedClip : clip)),
+        clips: timeline.clips.map((clip) => 
+          clip.id === draggedClip.id ? updatedClip : clip
+        ),
       };
 
       onTimelineUpdate(updatedTimeline);
     },
-    [isDragging, draggedClip, pixelsPerSecond, findNearestSnapPoint, timeline, onTimelineUpdate],
-  );
-
-  // マウスリリース時の処理
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    setDraggedClip(null);
-    setSnapPreview(null);
-  }, []);
-
-  // マウスイベントの登録
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
+    onDragEnd: () => {
+      setDraggedClip(null);
+      setSnapPreview(null);
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  });
+
+  // ========== レンダリング用の計算 ==========
+  
+  const timelineWidth = Math.max(800, timeline.duration * pixelsPerSecond);
+  const trackHeight = 80;
+  const headerHeight = 60;
+
+  // ビートマーカーの計算（表示用）
+  const beatMarkers = useMemo(() => {
+    if (!bpmAnalysis || !showBeatMarkers) return [];
+    return bpmAnalysis.beatTimes.map((time) => ({
+      time,
+      x: timeToPixel(time),
+      type: 'beat' as const,
+    }));
+  }, [bpmAnalysis, timeToPixel, showBeatMarkers]);
+
+  // 小節マーカーの計算（表示用）
+  const barMarkers = useMemo(() => {
+    if (!bpmAnalysis || !showBarMarkers) return [];
+    return bpmAnalysis.bars.map((time) => ({
+      time,
+      x: timeToPixel(time),
+      type: 'bar' as const,
+    }));
+  }, [bpmAnalysis, timeToPixel, showBarMarkers]);
 
   // プレイヘッドクリック処理
-  const handleTimelineClick = (e: React.MouseEvent) => {
-    if (!timelineRef.current) return;
+  const handleTimelineClick = useCallback((e: React.MouseEvent) => {
+    if (!timelineRef.current || isDragging) return;
 
     const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const rawTime = x / pixelsPerSecond;
+    const rawTime = pixelToTime(x);
 
-    const snappedTime = findNearestSnapPoint(rawTime);
-    onPlayheadChange?.(Math.max(0, Math.min(snappedTime, timeline.duration)));
-  };
+    const snapResult = findNearestSnapPoint(rawTime);
+    const snappedTime = Math.max(0, Math.min(snapResult.snappedTime, timeline.duration));
+    
+    onPlayheadChange?.(snappedTime);
+  }, [pixelToTime, findNearestSnapPoint, timeline.duration, onPlayheadChange, isDragging]);
 
-  // ビートグリッド設定の更新
-  const updateBeatGrid = (updates: Partial<BeatGrid>) => {
-    onBeatGridChange({ ...beatGrid, ...updates });
-  };
+  // タイムライン要素にドラッグハンドラーを登録
+  useEffect(() => {
+    if (timelineRef.current) {
+      registerElement(timelineRef.current);
+    }
+  }, [registerElement]);
 
   return (
     <div className="bg-dark-900 border-t border-dark-700">
-      {/* ヘッダー */}
+      {/* ========== ヘッダー（改良版） ========== */}
       <div className="bg-dark-800 border-b border-dark-700 px-4 py-3">
         <div className="flex items-center justify-between">
-          {/* 左側：BPM情報 */}
+          {/* 左側：BPM情報 + スナップ状態 */}
           <div className="flex items-center space-x-4">
             {bpmAnalysis && (
               <div className="flex items-center space-x-2 bg-purple-500/20 px-3 py-1.5 rounded-lg">
@@ -198,20 +209,53 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
               </div>
             )}
 
+            {/* スナップ状態表示 */}
+            <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs ${
+              magneticMode 
+                ? 'bg-yellow-500/20 text-yellow-400'
+                : isSnapEnabled 
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-gray-500/20 text-gray-400'
+            }`}>
+              {magneticMode ? (
+                <Zap className="w-3 h-3" />
+              ) : isSnapEnabled ? (
+                <Magnet className="w-3 h-3" />
+              ) : (
+                <AlertCircle className="w-3 h-3" />
+              )}
+              <span>{statusText}</span>
+            </div>
+
             <div className="text-sm text-gray-400">
               {timeline.clips.length}個のクリップ • {Math.floor(timeline.duration / 60)}:
               {(timeline.duration % 60).toFixed(0).padStart(2, '0')}
             </div>
           </div>
 
-          {/* 右側：グリッド設定 */}
+          {/* 右側：スナップ制御 */}
           <div className="flex items-center space-x-2">
-            {/* ビートスナップトグル */}
+            {/* Magneticモードトグル */}
             <button
-              onClick={() => updateBeatGrid({ enabled: !beatGrid.enabled })}
+              onClick={toggleMagneticMode}
               className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                beatGrid.enabled ? 'bg-purple-500 text-white' : 'bg-dark-700 text-gray-400 hover:text-white'
+                magneticMode 
+                  ? 'bg-yellow-500 text-black' 
+                  : 'bg-dark-700 text-gray-400 hover:text-white'
               }`}
+              title="Magneticモード切り替え (M キー)"
+            >
+              <Zap className="w-3 h-3" />
+              <span>Magnetic</span>
+            </button>
+
+            {/* スナップトグル */}
+            <button
+              onClick={toggleSnap}
+              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                isSnapEnabled ? 'bg-purple-500 text-white' : 'bg-dark-700 text-gray-400 hover:text-white'
+              }`}
+              title="スナップ切り替え (S キー)"
             >
               <Magnet className="w-3 h-3" />
               <span>スナップ</span>
@@ -228,7 +272,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
           </div>
         </div>
 
-        {/* グリッド設定パネル */}
+        {/* ========== グリッド設定パネル（改良版） ========== */}
         <AnimatePresence>
           {showGridSettings && (
             <motion.div
@@ -242,7 +286,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
                 <label className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={beatGrid.snapToBeat}
+                    checked={effectiveBeatGrid.snapToBeat}
                     onChange={(e) => updateBeatGrid({ snapToBeat: e.target.checked })}
                     className="w-4 h-4 text-purple-500 bg-dark-700 border-dark-600 rounded"
                   />
@@ -253,7 +297,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
                 <label className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={beatGrid.snapToBar}
+                    checked={effectiveBeatGrid.snapToBar}
                     onChange={(e) => updateBeatGrid({ snapToBar: e.target.checked })}
                     className="w-4 h-4 text-purple-500 bg-dark-700 border-dark-600 rounded"
                   />
@@ -264,7 +308,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-400">分割:</span>
                   <select
-                    value={beatGrid.subdivisions}
+                    value={effectiveBeatGrid.subdivisions}
                     onChange={(e) => updateBeatGrid({ subdivisions: Number(e.target.value) as 1 | 2 | 4 | 8 | 16 })}
                     className="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-sm text-white"
                   >
@@ -276,7 +320,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
                   </select>
                 </div>
 
-                {/* クオンタイズ強度 */}
+                {/* クオンタイズ強度（実際に反映されるように修正） */}
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-400">強度:</span>
                   <input
@@ -284,19 +328,55 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
                     min={0}
                     max={1}
                     step={0.1}
-                    value={beatGrid.quantizeStrength}
-                    onChange={(e) => updateBeatGrid({ quantizeStrength: Number(e.target.value) })}
+                    value={effectiveBeatGrid.quantizeStrength}
+                    onChange={(e) => setQuantizeStrength(Number(e.target.value))}
                     className="flex-1"
+                    title={`スナップ距離: ${bpmAnalysis ? calculateSnapDistance(0).toFixed(3) : 'N/A'}s`}
                   />
-                  <span className="text-xs text-gray-400 w-8">{Math.round(beatGrid.quantizeStrength * 100)}%</span>
+                  <span className="text-xs text-gray-400 w-8">
+                    {Math.round(effectiveBeatGrid.quantizeStrength * 100)}%
+                  </span>
                 </div>
+              </div>
+
+              {/* プリセットボタン */}
+              <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-dark-700">
+                <span className="text-sm text-gray-400">プリセット:</span>
+                <button
+                  onClick={presets.strict}
+                  className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30 transition-colors"
+                  title="Ctrl+1"
+                >
+                  厳密
+                </button>
+                <button
+                  onClick={presets.medium}
+                  className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs hover:bg-yellow-500/30 transition-colors"
+                  title="Ctrl+2"
+                >
+                  中程度
+                </button>
+                <button
+                  onClick={presets.loose}
+                  className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs hover:bg-green-500/30 transition-colors"
+                  title="Ctrl+3"
+                >
+                  緩い
+                </button>
+                <button
+                  onClick={presets.off}
+                  className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs hover:bg-gray-500/30 transition-colors"
+                  title="Ctrl+0"
+                >
+                  無効
+                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* タイムライン本体 */}
+      {/* ========== タイムライン本体（改良版） ========== */}
       <div className="relative overflow-x-auto overflow-y-hidden">
         <div
           ref={timelineRef}
@@ -333,39 +413,39 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
             </div>
           ))}
 
-          {/* スナップ予告線 */}
+          {/* スナップ予告線（改良版） */}
           {snapPreview !== null && (
             <div
-              className="absolute top-0 bottom-0 w-px bg-yellow-400 pointer-events-none z-10"
-              style={{ left: snapPreview * pixelsPerSecond }}
+              className="absolute top-0 bottom-0 w-px bg-yellow-400 pointer-events-none z-10 animate-pulse"
+              style={{ left: timeToPixel(snapPreview) }}
             >
               <div className="absolute -top-2 left-1/2 -translate-x-1/2">
-                <Target className="w-3 h-3 text-yellow-400" />
+                <Target className="w-3 h-3 text-yellow-400 drop-shadow-lg" />
               </div>
             </div>
           )}
 
-          {/* クリップ表示 */}
+          {/* クリップ表示（改良版） */}
           {timeline.clips.map((clip, layerIndex) => {
-            const clipX = clip.startTime * pixelsPerSecond;
-            const clipWidth = clip.duration * pixelsPerSecond;
+            const clipX = timeToPixel(clip.startTime);
+            const clipWidth = timeToPixel(clip.duration);
             const clipY = headerHeight + layerIndex * (trackHeight + 10);
 
             return (
               <motion.div
                 key={clip.id}
+                data-clip-id={clip.id} // ドラッグ対象の特定用
                 className={`absolute bg-gradient-to-r from-blue-500 to-blue-600 rounded cursor-move border-2 ${
                   selectedClipId === clip.id
                     ? 'border-purple-400 shadow-lg shadow-purple-400/20'
                     : 'border-blue-400/30 hover:border-blue-400'
-                } transition-all`}
+                } transition-all ${isDragging && draggedClip?.id === clip.id ? 'z-50' : ''}`}
                 style={{
                   left: clipX,
                   top: clipY,
                   width: Math.max(clipWidth, 50),
                   height: trackHeight,
                 }}
-                onMouseDown={(e) => handleClipMouseDown(e, clip)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -377,10 +457,15 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
                 </div>
 
                 {/* クリップのビート同期インジケーター */}
-                {beatGrid.enabled && bpmAnalysis && (
+                {isSnapEnabled && bpmAnalysis && (
                   <div className="absolute top-1 right-1">
                     <Magnet className="w-3 h-3 text-purple-300" />
                   </div>
+                )}
+
+                {/* ドラッグ中の視覚的フィードバック */}
+                {isDragging && draggedClip?.id === clip.id && (
+                  <div className="absolute inset-0 bg-yellow-400/20 border border-yellow-400 rounded pointer-events-none" />
                 )}
               </motion.div>
             );
@@ -389,7 +474,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
           {/* プレイヘッド */}
           <div
             className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-20"
-            style={{ left: playheadPosition * pixelsPerSecond }}
+            style={{ left: timeToPixel(playheadPosition) }}
           >
             <div className="absolute -top-2 left-1/2 -translate-x-1/2">
               <div className="w-3 h-3 bg-red-500 rotate-45" />
@@ -399,7 +484,7 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
           {/* 時間軸 */}
           <div className="absolute top-0 left-0 right-0 h-8 bg-dark-800 border-b border-dark-700">
             {Array.from({ length: Math.ceil(timeline.duration) + 1 }, (_, i) => (
-              <div key={i} className="absolute top-0 h-full flex items-center" style={{ left: i * pixelsPerSecond }}>
+              <div key={i} className="absolute top-0 h-full flex items-center" style={{ left: timeToPixel(i) }}>
                 <div className="w-px h-2 bg-gray-600" />
                 <span className="ml-1 text-xs text-gray-400 font-mono">
                   {Math.floor(i / 60)}:{(i % 60).toString().padStart(2, '0')}
@@ -410,23 +495,28 @@ const BeatTimeline: React.FC<BeatTimelineProps> = ({
         </div>
       </div>
 
-      {/* ヘルプテキスト */}
+      {/* ========== ヘルプテキスト（改良版） ========== */}
       <div className="bg-dark-800 border-t border-dark-700 px-4 py-2">
-        <div className="flex items-center space-x-2 text-xs text-gray-400">
-          <Info className="w-3 h-3" />
-          <span>
-            {beatGrid.enabled
-              ? 'ビートスナップが有効です。クリップを拍に合わせて自動調整します。'
-              : 'スナップボタンを押すとビートに合わせて自動配置できます。'}
-          </span>
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <div className="flex items-center space-x-2">
+            <Info className="w-3 h-3" />
+            <span>
+              {isSnapEnabled
+                ? `ビートスナップ有効 (強度: ${Math.round(effectiveBeatGrid.quantizeStrength * 100)}%) - クリップを拍に合わせて自動調整`
+                : magneticMode
+                ? 'Magneticモード - 一時的にスナップを無効化しています'
+                : 'スナップ無効 - 自由に配置できます'}
+            </span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <span><kbd className="px-1 bg-dark-700 rounded">M</kbd> Magnetic</span>
+            <span><kbd className="px-1 bg-dark-700 rounded">S</kbd> スナップ</span>
+            <span><kbd className="px-1 bg-dark-700 rounded">Ctrl+1-3</kbd> プリセット</span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-function clampTime(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
 
 export default BeatTimeline;

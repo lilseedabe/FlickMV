@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
@@ -12,12 +12,21 @@ import {
   VolumeX,
   Volume2,
   BarChart3,
-  Zap
+  Zap,
+  Eye,
+  EyeOff,
+  Trash2
 } from 'lucide-react';
 import type { AudioTrack, Timeline, BPMAnalysis } from '@/types';
 import { createAudioTrackFromFile, detectAudioBPM } from '../../utils/audio/audioAnalyzer';
 import BPMDetectorComponent from '../audio/BPMDetector';
 import WaveformDisplay from '../waveform/WaveformDisplay';
+
+// 新しい共通フックをインポート
+import {
+  useTimelineScale,
+  useTimelineDrag
+} from '../../hooks/timeline';
 
 interface EnhancedAudioTimelineProps {
   timeline: Timeline;
@@ -34,6 +43,14 @@ interface AudioProcessingState {
   error?: string;
 }
 
+/**
+ * Enhanced Audio Timeline (改良版)
+ * - requestAnimationFrameでドラッグスロットリング
+ * - Pointer Eventsに移行
+ * - 共通スケール管理
+ * - トラック折りたたみ・ミュート・削除
+ * - パフォーマンス最適化
+ */
 const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
   timeline,
   onTimelineUpdate,
@@ -48,15 +65,87 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [showBPMDetector, setShowBPMDetector] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [collapsedTracks, setCollapsedTracks] = useState<Set<string>>(new Set());
+  const [draggedTrack, setDraggedTrack] = useState<AudioTrack | null>(null);
+  
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const updateTimeoutRef = useRef<number | null>(null);
 
-  // Timeline scale (pixels per second)
-  const scale = 40 * zoom;
+  // ========== 共通フック使用 ==========
+  
+  // タイムラインスケール管理
+  const { pixelsPerSecond, timeToPixel, pixelToTime } = useTimelineScale({
+    zoom,
+    basePixelsPerSecond: 40,
+    minPixelsPerSecond: 10,
+    maxPixelsPerSecond: 160
+  });
+
+  // Pointer Events ベースドラッグ（オーディオトラック移動用）
+  const {
+    dragState,
+    registerElement: registerDragElement,
+    isDragging: isDraggingTrack
+  } = useTimelineDrag({
+    enabled: true,
+    throttle: true, // requestAnimationFrame でスロットリング
+    onDragStart: (e) => {
+      const target = e.target as HTMLElement;
+      const trackElement = target.closest('[data-track-id]');
+      if (trackElement) {
+        const trackId = trackElement.getAttribute('data-track-id');
+        const track = timeline.audioTracks.find(t => t.id === trackId);
+        if (track) {
+          setDraggedTrack(track);
+          setSelectedTrackId(track.id);
+        }
+      }
+    },
+    onDragMove: (e, deltaX, deltaY) => {
+      if (!draggedTrack || !timelineRef.current) return;
+
+      const rect = timelineRef.current.getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+      const newTime = Math.max(0, pixelToTime(currentX));
+
+      // デバウンス付きで更新（パフォーマンス向上）
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+
+      updateTimeoutRef.current = window.setTimeout(() => {
+        const updatedTrack: AudioTrack = {
+          ...draggedTrack,
+          startTime: newTime,
+        };
+
+        const updatedTracks = timeline.audioTracks.map(track =>
+          track.id === draggedTrack.id ? updatedTrack : track
+        );
+
+        const updatedTimeline: Timeline = {
+          ...timeline,
+          audioTracks: updatedTracks,
+          duration: Math.max(timeline.duration, newTime + draggedTrack.duration)
+        };
+
+        onTimelineUpdate(updatedTimeline);
+      }, 16); // ~60fps での更新
+    },
+    onDragEnd: () => {
+      setDraggedTrack(null);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+    }
+  });
+
+  // レイアウト定数
   const trackHeight = 80; // Enhanced height for waveforms
+  const collapsedTrackHeight = 40; // Collapsed state
 
-  const timeToPixel = (time: number) => time * scale;
-  const pixelToTime = (pixel: number) => pixel / scale;
-
-  // 音声ファイルの処理
+  // 音声ファイルの処理（改良版）
   const processAudioFile = useCallback(async (file: File, startTime: number = 0) => {
     setProcessingState({
       isProcessing: true,
@@ -116,7 +205,7 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
     }
   }, [timeline, onTimelineUpdate]);
 
-  // ドラッグ&ドロップハンドラー
+  // ドラッグ&ドロップハンドラー（改良版）
   const handleDrop = useCallback(async (e: React.DragEvent, dropTime?: number) => {
     e.preventDefault();
     setDragOver(false);
@@ -160,6 +249,13 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
     if (selectedTrackId === trackId) {
       setSelectedTrackId(null);
     }
+
+    // 折りたたみ状態もクリア
+    setCollapsedTracks(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(trackId);
+      return newSet;
+    });
   }, [timeline, onTimelineUpdate, selectedTrackId]);
 
   // トラックミュート切り替え
@@ -176,6 +272,58 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
     onTimelineUpdate(updatedTimeline);
   }, [timeline, onTimelineUpdate]);
 
+  // トラック折りたたみ切り替え
+  const toggleTrackCollapse = useCallback((trackId: string) => {
+    setCollapsedTracks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(trackId)) {
+        newSet.delete(trackId);
+      } else {
+        newSet.add(trackId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // 全トラック折りたたみ切り替え
+  const toggleAllTracksCollapse = useCallback(() => {
+    if (collapsedTracks.size === timeline.audioTracks.length) {
+      // 全て展開
+      setCollapsedTracks(new Set());
+    } else {
+      // 全て折りたたみ
+      setCollapsedTracks(new Set(timeline.audioTracks.map(t => t.id)));
+    }
+  }, [collapsedTracks.size, timeline.audioTracks]);
+
+  // タイムラインクリック処理
+  const handleTimelineClick = useCallback((e: React.MouseEvent, trackId: string) => {
+    if (!timelineRef.current || isDraggingTrack) return;
+
+    const rect = timelineRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const clickTime = pixelToTime(x);
+    
+    console.log(`Timeline clicked at ${clickTime.toFixed(2)}s for track ${trackId}`);
+    // プレイヘッド移動の実装をここに追加
+  }, [pixelToTime, isDraggingTrack]);
+
+  // ドラッグ要素の登録
+  useEffect(() => {
+    if (timelineRef.current) {
+      registerDragElement(timelineRef.current);
+    }
+  }, [registerDragElement]);
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // 選択されたトラック
   const selectedTrack = selectedTrackId
     ? timeline.audioTracks.find(track => track.id === selectedTrackId)
@@ -183,7 +331,7 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
 
   return (
     <div className={`bg-dark-900 rounded-lg border border-dark-700 ${className}`}>
-      {/* ヘッダー */}
+      {/* ========== ヘッダー（改良版） ========== */}
       <div className="flex items-center justify-between p-4 border-b border-dark-700">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
@@ -193,11 +341,36 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
             <h3 className="text-lg font-semibold text-white">Enhanced Audio Timeline</h3>
             <p className="text-sm text-gray-400">
               音声波形とBPM検出付きタイムライン • {timeline.audioTracks.length} トラック
+              {collapsedTracks.size > 0 && ` • ${collapsedTracks.size} 折りたたみ中`}
             </p>
           </div>
+          
+          {/* ドラッグ状態インジケーター */}
+          {isDraggingTrack && (
+            <div className="text-sm text-yellow-400 bg-yellow-500/20 px-2 py-1 rounded flex items-center space-x-1">
+              <Zap className="w-3 h-3" />
+              <span>Moving track...</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* 全トラック折りたたみ切り替え */}
+          {timeline.audioTracks.length > 0 && (
+            <button
+              onClick={toggleAllTracksCollapse}
+              className="flex items-center space-x-1 bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white px-3 py-2 rounded-lg text-sm transition-all"
+              title={collapsedTracks.size === timeline.audioTracks.length ? "全て展開" : "全て折りたたみ"}
+            >
+              {collapsedTracks.size === timeline.audioTracks.length ? (
+                <Eye className="w-4 h-4" />
+              ) : (
+                <EyeOff className="w-4 h-4" />
+              )}
+              <span>{collapsedTracks.size === timeline.audioTracks.length ? "展開" : "折りたたみ"}</span>
+            </button>
+          )}
+
           {selectedTrack && (
             <button
               onClick={() => setShowBPMDetector(true)}
@@ -222,7 +395,7 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
         </div>
       </div>
 
-      {/* 処理状態の表示 */}
+      {/* ========== 処理状態の表示 ========== */}
       <AnimatePresence>
         {processingState.isProcessing && (
           <motion.div
@@ -266,7 +439,7 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 音声トラック一覧 */}
+      {/* ========== 音声トラック一覧（改良版） ========== */}
       <div className="divide-y divide-dark-700">
         {timeline.audioTracks.length === 0 ? (
           <div
@@ -295,29 +468,67 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
             </div>
           </div>
         ) : (
-          timeline.audioTracks.map((track) => (
-            <motion.div
-              key={track.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`p-4 hover:bg-dark-800/50 transition-all cursor-pointer ${
-                selectedTrackId === track.id ? 'bg-cyan-500/10 border-l-4 border-cyan-500' : ''
-              }`}
-              onClick={() => setSelectedTrackId(track.id)}
-            >
-              <div className="flex items-start space-x-4">
-                {/* トラック情報 */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-white truncate">
-                      {track.name}
-                    </h4>
-                    <div className="flex items-center space-x-2">
-                      {track.bpm && (
-                        <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-1 rounded">
-                          {track.bpm} BPM
-                        </span>
-                      )}
+          <div 
+            ref={timelineRef}
+            className="relative"
+            style={{ width: Math.max(800, timeToPixel(timeline.duration)) }}
+          >
+            {timeline.audioTracks.map((track) => {
+              const isCollapsed = collapsedTracks.has(track.id);
+              const currentHeight = isCollapsed ? collapsedTrackHeight : trackHeight;
+              
+              return (
+                <motion.div
+                  key={track.id}
+                  data-track-id={track.id} // ドラッグ対象の特定用
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ 
+                    opacity: 1, 
+                    y: 0,
+                    height: currentHeight
+                  }}
+                  transition={{ duration: 0.2 }}
+                  className={`relative overflow-hidden border-b border-dark-700 bg-dark-850 hover:bg-dark-800/50 transition-all cursor-pointer ${
+                    selectedTrackId === track.id ? 'bg-cyan-500/10 border-l-4 border-cyan-500' : ''
+                  } ${isDraggingTrack && draggedTrack?.id === track.id ? 'z-50' : ''}`}
+                  style={{ height: currentHeight }}
+                  onClick={() => setSelectedTrackId(track.id)}
+                >
+                  {/* トラック情報ヘッダー */}
+                  <div className="flex items-center justify-between p-2 bg-dark-800/50">
+                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                      {/* 折りたたみボタン */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTrackCollapse(track.id);
+                        }}
+                        className="p-1 hover:bg-dark-600 rounded transition-colors"
+                        title={isCollapsed ? "展開" : "折りたたみ"}
+                      >
+                        {isCollapsed ? (
+                          <EyeOff className="w-3 h-3 text-gray-400" />
+                        ) : (
+                          <Eye className="w-3 h-3 text-gray-400" />
+                        )}
+                      </button>
+
+                      <h4 className="text-sm font-medium text-white truncate">
+                        {track.name}
+                      </h4>
+
+                      <div className="flex items-center space-x-1 text-xs text-gray-400">
+                        {track.bpm && (
+                          <span className="bg-purple-500/20 text-purple-400 px-1 rounded">
+                            {track.bpm} BPM
+                          </span>
+                        )}
+                        <span>{Math.floor(track.duration / 60)}:{(track.duration % 60).toFixed(1).padStart(4, '0')}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-1">
+                      {/* ミュートボタン */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -328,55 +539,98 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
                             ? 'text-red-400 hover:text-red-300' 
                             : 'text-gray-400 hover:text-white'
                         }`}
+                        title={track.muted ? "ミュート解除" : "ミュート"}
                       >
                         {track.muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                       </button>
+
+                      {/* 削除ボタン */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           removeAudioTrack(track.id);
                         }}
-                        className="text-red-400 hover:text-red-300 transition-colors"
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                        title="削除"
                       >
-                        ×
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  <div className="text-xs text-gray-400 mb-3">
-                    長さ: {Math.floor(track.duration / 60)}:{(track.duration % 60).toFixed(1).padStart(4, '0')} •
-                    開始: {track.startTime.toFixed(1)}s •
-                    ビート: {track.beats?.length || 0}個
-                  </div>
+                  {/* 波形表示エリア */}
+                  {!isCollapsed && (
+                    <div 
+                      className="relative h-full p-2"
+                      onClick={(e) => handleTimelineClick(e, track.id)}
+                    >
+                      {track.url ? (
+                        <div
+                          className="relative"
+                          style={{
+                            left: timeToPixel(track.startTime),
+                            width: timeToPixel(track.duration),
+                            height: trackHeight - 40, // ヘッダー分を除外
+                          }}
+                        >
+                          <WaveformDisplay
+                            audioTrack={track}
+                            width={timeToPixel(track.duration)}
+                            height={trackHeight - 40}
+                            startTime={0}
+                            duration={track.duration}
+                            zoom={1}
+                            color={track.muted ? '#6b7280' : '#06b6d4'}
+                            showBeats={true}
+                            className="w-full rounded border border-cyan-500/30 bg-cyan-500/10"
+                            onWaveformClick={(time) => {
+                              console.log(`Waveform clicked at ${time}s`);
+                            }}
+                          />
+                          
+                          {/* ドラッグ中の視覚的フィードバック */}
+                          {isDraggingTrack && draggedTrack?.id === track.id && (
+                            <div className="absolute inset-0 border-2 border-yellow-400 rounded pointer-events-none animate-pulse" />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center h-full px-2 bg-cyan-500/10 border border-cyan-500/30 rounded">
+                          <Activity className="w-3 h-3 mr-1 text-cyan-400" />
+                          <span className="text-xs truncate text-cyan-300">
+                            波形データなし
+                          </span>
+                        </div>
+                      )}
 
-                  {/* 波形表示 */}
-                  {track.url && (
-                    <div className="bg-dark-800 rounded-lg p-2">
-                      <WaveformDisplay
-                        audioTrack={track}
-                        width={Math.min(400, timeToPixel(track.duration))}
-                        height={60}
-                        startTime={0}
-                        duration={track.duration}
-                        zoom={1}
-                        color={track.muted ? '#6b7280' : '#06b6d4'}
-                        showBeats={true}
-                        className="w-full"
-                        onWaveformClick={(time) => {
-                          console.log(`Waveform clicked at ${time}s`);
-                          // プレイヘッド移動の実装をここに追加
-                        }}
-                      />
+                      {/* プレイヘッド */}
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-10"
+                        style={{ left: timeToPixel(playheadPosition) }}
+                      >
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2">
+                          <div className="w-2 h-2 bg-red-500 rotate-45" />
+                        </div>
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
-            </motion.div>
-          ))
+
+                  {/* 折りたたみ状態でのミニ波形 */}
+                  {isCollapsed && track.url && (
+                    <div className="flex items-center px-2 h-full">
+                      <div className="flex-1 h-4 bg-cyan-500/20 rounded overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-cyan-500/60 to-cyan-400/40" 
+                             style={{ width: `${Math.min(100, (track.duration / timeline.duration) * 100)}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* BPM検出モーダル */}
+      {/* ========== BPM検出モーダル ========== */}
       <AnimatePresence>
         {showBPMDetector && selectedTrack && (
           <motion.div
@@ -400,7 +654,6 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
                   duration: selectedTrack.duration
                 } as any}
                 onBPMDetected={(analysis: BPMAnalysis) => {
-                  // BPM検出結果をトラックに反映
                   const updatedTracks = timeline.audioTracks.map(track => 
                     track.id === selectedTrack.id 
                       ? {
