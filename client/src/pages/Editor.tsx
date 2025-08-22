@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 // Components
 import { MediaLibrary } from '../components/media/MediaLibrary';
 import Timeline from '../components/timeline/Timeline';
-
+import Preview from '../components/preview/Preview';
 import PlaybackControls from '../components/editor/PlaybackControls';
 
 
@@ -247,6 +247,40 @@ class PreviewWindowManager {
     const window = this.windows.get(windowId);
     return window ? !window.closed : false;
   }
+
+  // ウィンドウ取得メソッドを追加
+  getWindow(windowId: string): Window | null {
+    return this.windows.get(windowId) || null;
+  }
+
+  // プレビュー内容を実際のCanvasで更新
+  updatePreviewWithCanvas(windowId: string, sourceCanvas: HTMLCanvasElement) {
+    const window = this.windows.get(windowId);
+    if (!window || window.closed) return;
+
+    const canvas = window.document.getElementById('preview-canvas') as HTMLCanvasElement;
+    if (canvas && sourceCanvas) {
+      const ctx = canvas.getContext('2d');
+      const sourceCtx = sourceCanvas.getContext('2d');
+      
+      if (ctx && sourceCtx) {
+        canvas.width = sourceCanvas.width;
+        canvas.height = sourceCanvas.height;
+        ctx.drawImage(sourceCanvas, 0, 0);
+      }
+    }
+  }
+
+  // リアルタイム更新用のメソッド
+  updateAllPreviews(sourceCanvas: HTMLCanvasElement) {
+    this.windows.forEach((window, windowId) => {
+      if (!window.closed) {
+        this.updatePreviewWithCanvas(windowId, sourceCanvas);
+      } else {
+        this.windows.delete(windowId);
+      }
+    });
+  }
 }
 
 // Video resolution options
@@ -377,6 +411,51 @@ const Editor: React.FC = () => {
 
   const currentVideoResolution = VIDEO_RESOLUTIONS[videoResolution];
 
+  // プレビューレンダリング用の関数
+  const renderPreviewContent = () => {
+    return (
+      <Preview
+        project={project}
+        playheadPosition={playheadPosition}
+        isPlaying={isPlaying}
+      />
+    );
+  };
+
+  // ポップアウトプレビューウィンドウ更新機能
+  const updatePreviewWindows = useCallback(() => {
+    previewWindows.forEach(windowId => {
+      const window = previewManager.getWindow(windowId);
+      if (window && !window.closed) {
+        const container = window.document.getElementById('preview-container');
+        if (container) {
+          container.innerHTML = `
+            <canvas id="preview-canvas" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
+          `;
+          
+          // 少し遅延してからcanvasを更新
+          setTimeout(() => {
+            const canvas = window.document.getElementById('preview-canvas') as HTMLCanvasElement;
+            const mainCanvas = document.querySelector('canvas') as HTMLCanvasElement;
+            if (canvas && mainCanvas) {
+              const ctx = canvas.getContext('2d');
+              if (ctx && mainCanvas.getContext('2d')) {
+                canvas.width = mainCanvas.width;
+                canvas.height = mainCanvas.height;
+                ctx.drawImage(mainCanvas, 0, 0);
+              }
+            }
+          }, 100);
+        }
+      }
+    });
+  }, [previewWindows, playheadPosition, project]);
+
+  // プレビュー更新の効果
+  useEffect(() => {
+    updatePreviewWindows();
+  }, [updatePreviewWindows]);
+
   // Tutorial steps
   const tutorialSteps = [
     {
@@ -479,15 +558,40 @@ const Editor: React.FC = () => {
       
       // プレビュー内容を更新
       setTimeout(() => {
-        previewManager.updatePreview(windowId, `
-          <div style="text-align: center;">
-            <div style="font-size: 24px; margin-bottom: 8px;">🎬</div>
-            <div>動画プレビュー</div>
-            <div style="font-size: 12px; opacity: 0.8; margin-top: 8px;">
-              ${resolutionData.width} × ${resolutionData.height}
-            </div>
-          </div>
-        `);
+        const window = previewManager.getWindow(windowId);
+        if (window) {
+          const container = window.document.getElementById('preview-container');
+          if (container) {
+            container.innerHTML = `
+              <canvas id="preview-canvas" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
+            `;
+            
+            // メインキャンバスからコピー
+            const mainCanvas = document.querySelector('canvas') as HTMLCanvasElement;
+            const canvas = window.document.getElementById('preview-canvas') as HTMLCanvasElement;
+            if (canvas && mainCanvas) {
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                canvas.width = resolutionData.width;
+                canvas.height = resolutionData.height;
+                
+                // フォールバックコンテンツを描画
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                gradient.addColorStop(0, '#667eea');
+                gradient.addColorStop(1, '#764ba2');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('🎬 FlickMV Preview', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = '16px Arial';
+                ctx.fillText(`${resolutionData.width} × ${resolutionData.height}`, canvas.width / 2, canvas.height / 2 + 20);
+              }
+            }
+          }
+        }
       }, 100);
     }
   }, []);
@@ -936,69 +1040,89 @@ const Editor: React.FC = () => {
             </div>
           </div>
           
-          {/* Mini Preview Area - ポップアウト機能復活 */}
+          {/* 修正されたMini Preview Area */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="h-32 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative"
+            className="h-48 bg-dark-850 border-b border-dark-700 flex items-center justify-center relative"
             id="mini-preview"
           >
-            <div className="relative">
-              <div 
-                className="bg-black rounded-lg border border-gray-700 flex items-center justify-center text-gray-400 text-sm relative"
-                style={{ width: '120px', height: '68px' }}
-              >
-                ミニプレビュー
+            <div className="relative w-full h-full p-4">
+              {/* 実際のプレビューコンポーネントを表示 */}
+              <div className="w-full h-full rounded-lg overflow-hidden border border-gray-700">
+                {renderPreviewContent()}
               </div>
               
-              {/* Popup Controls - 復活 */}
-              <div className="absolute -top-2 -right-2 flex gap-1">
+              {/* Popup Controls */}
+              <div className="absolute top-6 right-6 flex gap-2">
                 <button
                   onClick={() => createPreviewWindow(videoResolution)}
-                  className="bg-purple-500 hover:bg-purple-600 text-white p-1.5 rounded-full text-xs transition-all shadow-lg"
+                  className="bg-purple-500 hover:bg-purple-600 text-white p-2 rounded-full text-xs transition-all shadow-lg"
                   title="実際のサイズでプレビューを開く"
                 >
-                  <ExternalLink className="w-3 h-3" />
+                  <ExternalLink className="w-4 h-4" />
                 </button>
                 <button
                   onClick={togglePiP}
-                  className={`p-1.5 rounded-full text-xs transition-all shadow-lg ${
+                  className={`p-2 rounded-full text-xs transition-all shadow-lg ${
                     showPiP 
                       ? 'bg-green-500 hover:bg-green-600 text-white' 
                       : 'bg-gray-600 hover:bg-gray-500 text-white'
                   }`}
                   title="Picture-in-Picture"
                 >
-                  <PictureInPicture2 className="w-3 h-3" />
+                  <PictureInPicture2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Quick Resolution Buttons - 復活 */}
-            <div className="absolute top-2 left-2 flex gap-1">
-              {Object.entries(VIDEO_RESOLUTIONS)
-                .filter(([key]) => ['9:16', '16:9', '1:1'].includes(key))
-                .map(([resolution, resData]) => {
-                const Icon = resData.icon;
-                return (
-                  <button
-                    key={resolution}
-                    onClick={() => createPreviewWindow(resolution as Resolution)}
-                    className="bg-dark-700/90 hover:bg-dark-600 backdrop-blur-sm border border-dark-600 p-1.5 rounded text-xs transition-all"
-                    title={`${resData.label}でプレビューを開く`}
-                  >
-                    <Icon className="w-3 h-3" />
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Preview Windows Status - 復活 */}
-            {previewWindows.length > 0 && (
-              <div className="absolute bottom-2 right-2 bg-green-500/90 backdrop-blur-sm text-white px-2 py-1 rounded text-xs">
-                {previewWindows.length} 個のプレビューが開いています
+              {/* Quick Resolution Buttons */}
+              <div className="absolute top-6 left-6 flex gap-1">
+                {Object.entries(VIDEO_RESOLUTIONS)
+                  .filter(([key]) => ['9:16', '16:9', '1:1'].includes(key))
+                  .map(([resolution, resData]) => {
+                  const Icon = resData.icon;
+                  return (
+                    <button
+                      key={resolution}
+                      onClick={() => createPreviewWindow(resolution as Resolution)}
+                      className="bg-dark-700/90 hover:bg-dark-600 backdrop-blur-sm border border-dark-600 p-2 rounded text-xs transition-all"
+                      title={`${resData.label}でプレビューを開く`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  );
+                })}
               </div>
-            )}
+
+              {/* Preview Status */}
+              <div className="absolute bottom-6 left-6 bg-black/70 rounded-lg px-3 py-2 text-sm text-white">
+                <div className="flex items-center space-x-4">
+                  <span>プレビュー品質: リアルタイム</span>
+                  <span>解像度: {currentVideoResolution.width}×{currentVideoResolution.height}</span>
+                  {project.timeline.clips.length > 0 && (
+                    <span className="text-green-400">✓ {project.timeline.clips.length}クリップ</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview Windows Status */}
+              {previewWindows.length > 0 && (
+                <div className="absolute bottom-6 right-6 bg-green-500/90 backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm">
+                  {previewWindows.length} 個のプレビューが開いています
+                </div>
+              )}
+
+              {/* No Media Message */}
+              {project.timeline.clips.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                  <div className="text-center text-gray-400">
+                    <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-lg font-medium">プレビューなし</p>
+                    <p className="text-sm">タイムラインにクリップを追加してください</p>
+                  </div>
+                </div>
+              )}
           </motion.div>
 
           {/* Playback Controls */}

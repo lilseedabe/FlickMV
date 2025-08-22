@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Maximize2, 
@@ -30,6 +30,7 @@ const Preview: React.FC<PreviewProps> = ({
   const [showSafeArea, setShowSafeArea] = useState(true);
   const [deviceFrame, setDeviceFrame] = useState<'none' | 'mobile' | 'tablet' | 'desktop'>('mobile');
   const [previewQuality, setPreviewQuality] = useState<'low' | 'medium' | 'high'>('medium');
+  const [loadedMedia, setLoadedMedia] = useState<Map<string, HTMLImageElement | HTMLVideoElement>>(new Map());
 
   // Get resolution data
   const resolution = RESOLUTION_PRESETS[project.settings.resolution];
@@ -57,103 +58,222 @@ const Preview: React.FC<PreviewProps> = ({
 
   const { width: previewWidth, height: previewHeight } = calculatePreviewSize();
 
+  // Load media files
+  const loadMediaFile = useCallback(async (mediaFile: any): Promise<HTMLImageElement | HTMLVideoElement | null> => {
+    if (loadedMedia.has(mediaFile.id)) {
+      return loadedMedia.get(mediaFile.id) || null;
+    }
+
+    try {
+      if (mediaFile.type === 'image') {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        return new Promise((resolve, reject) => {
+          img.onload = () => {
+            setLoadedMedia(prev => new Map(prev).set(mediaFile.id, img));
+            resolve(img);
+          };
+          img.onerror = reject;
+          img.src = mediaFile.url;
+        });
+      } else if (mediaFile.type === 'video') {
+        const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
+        video.muted = true;
+        video.preload = 'metadata';
+        
+        return new Promise((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            setLoadedMedia(prev => new Map(prev).set(mediaFile.id, video));
+            resolve(video);
+          };
+          video.onerror = reject;
+          video.src = mediaFile.url;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load media:', error);
+    }
+
+    return null;
+  }, [loadedMedia]);
+
   // Render current frame
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas size
-    canvas.width = resolution.width;
-    canvas.height = resolution.height;
-
-    // Clear canvas
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Find active clips at current time
-    const activeClips = project.timeline.clips.filter(clip => 
-      playheadPosition >= clip.startTime && 
-      playheadPosition < clip.startTime + clip.duration
-    );
-
-    // Sort clips by layer (bottom to top)
-    activeClips.sort((a, b) => a.layer - b.layer);
-
-    // Render clips
-    activeClips.forEach(clip => {
-      const mediaFile = project.mediaLibrary.find(m => m.id === clip.mediaId);
-      if (!mediaFile) return;
-
-      // Calculate clip progress (0-1)
-      const clipProgress = (playheadPosition - clip.startTime) / clip.duration;
+    const renderFrame = async () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
       
-      if (mediaFile.type === 'image') {
-        renderImageClip(ctx, mediaFile, clip, clipProgress);
-      } else if (mediaFile.type === 'video') {
-        renderVideoClip(ctx, mediaFile, clip, clipProgress);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Set canvas size
+      canvas.width = resolution.width;
+      canvas.height = resolution.height;
+
+      // Clear canvas
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Find active clips at current time
+      const activeClips = project.timeline.clips.filter(clip => 
+        playheadPosition >= clip.startTime && 
+        playheadPosition < clip.startTime + clip.duration
+      );
+
+      // Sort clips by layer (bottom to top)
+      activeClips.sort((a, b) => a.layer - b.layer);
+
+      // Render clips
+      for (const clip of activeClips) {
+        const mediaFile = project.mediaLibrary.find(m => m.id === clip.mediaId);
+        if (!mediaFile) continue;
+
+        const clipProgress = (playheadPosition - clip.startTime) / clip.duration;
+        
+        if (mediaFile.type === 'image') {
+          await renderImageClip(ctx, mediaFile, clip, clipProgress);
+        } else if (mediaFile.type === 'video') {
+          await renderVideoClip(ctx, mediaFile, clip, clipProgress);
+        }
       }
-    });
 
-    // Add text overlays if any
-    renderTextOverlays(ctx);
+      // Add text overlays
+      renderTextOverlays(ctx);
+    };
 
-  }, [playheadPosition, project, resolution]);
+    renderFrame();
+  }, [playheadPosition, project, resolution, loadedMedia]);
 
-  const renderImageClip = (
+  const renderImageClip = async (
     ctx: CanvasRenderingContext2D, 
     mediaFile: any, 
     clip: any, 
     progress: number
   ) => {
-    // For now, just fill with a color representing the image
-    // In a real app, you'd load and draw the actual image
-    const img = new Image();
-    img.onload = () => {
-      // Apply Ken Burns effect if enabled
-      const panZoomEffect = clip.effects?.find((e: any) => e.type === 'pan_zoom');
-      if (panZoomEffect && panZoomEffect.enabled) {
-        const { zoom = 1.1, panX = 0, panY = 0 } = panZoomEffect.parameters;
-        const currentZoom = 1 + (zoom - 1) * progress;
-        const currentPanX = panX * progress * ctx.canvas.width;
-        const currentPanY = panY * progress * ctx.canvas.height;
-        
+    try {
+      const img = await loadMediaFile(mediaFile) as HTMLImageElement;
+      
+      if (img && img.complete) {
         ctx.save();
-        ctx.scale(currentZoom, currentZoom);
-        ctx.translate(currentPanX, currentPanY);
-        ctx.drawImage(img, 0, 0, ctx.canvas.width / currentZoom, ctx.canvas.height / currentZoom);
+        
+        // Apply Ken Burns effect if enabled
+        const panZoomEffect = clip.effects?.find((e: any) => e.type === 'pan_zoom');
+        if (panZoomEffect && panZoomEffect.enabled) {
+          const { zoom = 1.1, panX = 0, panY = 0 } = panZoomEffect.parameters;
+          const currentZoom = 1 + (zoom - 1) * progress;
+          const currentPanX = panX * progress * ctx.canvas.width;
+          const currentPanY = panY * progress * ctx.canvas.height;
+          
+          ctx.scale(currentZoom, currentZoom);
+          ctx.translate(currentPanX / currentZoom, currentPanY / currentZoom);
+          
+          // Calculate scaling to fit canvas
+          const scaleX = ctx.canvas.width / currentZoom / img.width;
+          const scaleY = ctx.canvas.height / currentZoom / img.height;
+          const scale = Math.max(scaleX, scaleY); // Cover the canvas
+          
+          const drawWidth = img.width * scale;
+          const drawHeight = img.height * scale;
+          const drawX = (ctx.canvas.width / currentZoom - drawWidth) / 2;
+          const drawY = (ctx.canvas.height / currentZoom - drawHeight) / 2;
+          
+          ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        } else {
+          // Standard fit
+          const scaleX = ctx.canvas.width / img.width;
+          const scaleY = ctx.canvas.height / img.height;
+          const scale = Math.max(scaleX, scaleY);
+          
+          const drawWidth = img.width * scale;
+          const drawHeight = img.height * scale;
+          const drawX = (ctx.canvas.width - drawWidth) / 2;
+          const drawY = (ctx.canvas.height - drawHeight) / 2;
+          
+          ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        }
+        
         ctx.restore();
       } else {
-        ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
+        // Fallback: colored rectangle
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'];
+        const colorIndex = parseInt(clip.id.slice(-1)) % colors.length;
+        ctx.fillStyle = colors[colorIndex];
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        
+        // Loading text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('画像を読み込み中...', ctx.canvas.width / 2, ctx.canvas.height / 2);
       }
-    };
-    
-    // For demo purposes, use a solid color
-    const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'];
-    const colorIndex = parseInt(clip.id.slice(-1)) % colors.length;
-    ctx.fillStyle = colors[colorIndex];
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    } catch (error) {
+      console.error('Error rendering image clip:', error);
+      // Error fallback
+      ctx.fillStyle = '#ff4444';
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('画像の読み込みに失敗', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    }
   };
 
-  const renderVideoClip = (
+  const renderVideoClip = async (
     ctx: CanvasRenderingContext2D, 
     mediaFile: any, 
     clip: any, 
     progress: number
   ) => {
-    // For demo purposes, render a gradient
-    const gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, ctx.canvas.height);
-    gradient.addColorStop(0, '#667eea');
-    gradient.addColorStop(1, '#764ba2');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    
-    // Add some animated elements to show video progress
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    const barWidth = ctx.canvas.width * progress;
-    ctx.fillRect(0, ctx.canvas.height - 10, barWidth, 10);
+    try {
+      const video = await loadMediaFile(mediaFile) as HTMLVideoElement;
+      
+      if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA
+        // Set video time based on clip progress
+        const videoTime = (clip.startTime + progress * clip.duration) % video.duration;
+        video.currentTime = videoTime;
+        
+        // Draw video frame
+        const scaleX = ctx.canvas.width / video.videoWidth;
+        const scaleY = ctx.canvas.height / video.videoHeight;
+        const scale = Math.max(scaleX, scaleY);
+        
+        const drawWidth = video.videoWidth * scale;
+        const drawHeight = video.videoHeight * scale;
+        const drawX = (ctx.canvas.width - drawWidth) / 2;
+        const drawY = (ctx.canvas.height - drawHeight) / 2;
+        
+        ctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+        
+        // Progress bar for video
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        const barWidth = ctx.canvas.width * progress;
+        ctx.fillRect(0, ctx.canvas.height - 10, barWidth, 10);
+      } else {
+        // Fallback: gradient
+        const gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, ctx.canvas.height);
+        gradient.addColorStop(0, '#667eea');
+        gradient.addColorStop(1, '#764ba2');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        
+        // Loading text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('動画を読み込み中...', ctx.canvas.width / 2, ctx.canvas.height / 2);
+      }
+    } catch (error) {
+      console.error('Error rendering video clip:', error);
+      // Error fallback
+      ctx.fillStyle = '#ff4444';
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('動画の読み込みに失敗', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    }
   };
 
   const renderTextOverlays = (ctx: CanvasRenderingContext2D) => {
@@ -162,6 +282,12 @@ const Preview: React.FC<PreviewProps> = ({
     ctx.font = '24px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('FlickMV Preview', ctx.canvas.width / 2, 50);
+    
+    // Time display
+    ctx.font = '16px monospace';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    const timeText = `${Math.floor(playheadPosition / 60)}:${(playheadPosition % 60).toFixed(1).padStart(4, '0')}`;
+    ctx.fillText(timeText, ctx.canvas.width / 2, ctx.canvas.height - 30);
   };
 
   const toggleFullscreen = () => {
@@ -263,6 +389,9 @@ const Preview: React.FC<PreviewProps> = ({
           <div>{resolution.width}×{resolution.height}</div>
           <div>{project.settings.frameRate}fps</div>
           <div>{Math.floor(playheadPosition / 60)}:{(playheadPosition % 60).toFixed(1).padStart(4, '0')}</div>
+          <div className="text-xs text-green-400">
+            クリップ: {project.timeline.clips.length}
+          </div>
         </div>
       </div>
 
