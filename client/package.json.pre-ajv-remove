@@ -61,10 +61,14 @@
   },
   "overrides": {
     "schema-utils": "3.3.0",
+    "ajv": "6.12.6", 
+    "ajv-keywords": "3.5.2",
     "fork-ts-checker-webpack-plugin": "6.5.3"
   },
   "resolutions": {
     "schema-utils": "3.3.0",
+    "ajv": "6.12.6",
+    "ajv-keywords": "3.5.2", 
     "fork-ts-checker-webpack-plugin": "6.5.3"
   }
 }
