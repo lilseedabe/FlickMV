@@ -173,19 +173,20 @@ const Timeline: React.FC<TimelineProps> = ({
           trimStart: Math.max(0, resizeState.originalTrimStart + timeDiff)
         };
       } else if (resizeState.edge === 'right') {
-        // 右端のリサイズ - 長さのみ調整
+        // 右端のリサイズ - 長さのみ調整（制限を緩和）
         const newDuration = Math.max(0.1, resizeState.originalDuration + deltaTime);
         
-        // 元のメディアファイルの長さを考慮した最大長さ制限
-        const maxPossibleDuration = resizeState.originalTrimEnd - resizeState.originalTrimStart;
-        const finalDuration = Math.min(newDuration, maxPossibleDuration);
+        // 右端リサイズでは元のメディアファイルの長さまで、または合理的な最大長まで許可
+        // trimEnd制限を削除して、より自由にリサイズできるようにする
+        const maxReasonableDuration = 300; // 5分を最大長とする（必要に応じて調整）
+        const finalDuration = Math.min(newDuration, maxReasonableDuration);
         
-        console.log(`🔧 Right resize: duration ${finalDuration.toFixed(2)}s (max: ${maxPossibleDuration.toFixed(2)}s)`);
+        console.log(`🔧 Right resize: duration ${finalDuration.toFixed(2)}s (was: ${resizeState.originalDuration.toFixed(2)}s, max: ${maxReasonableDuration}s)`);
 
         updatedClip = {
           ...clip,
           duration: finalDuration,
-          trimEnd: resizeState.originalTrimStart + finalDuration
+          trimEnd: resizeState.originalTrimStart + finalDuration // trimEndも合わせて更新
         };
       } else {
         return; // 不正な状態
