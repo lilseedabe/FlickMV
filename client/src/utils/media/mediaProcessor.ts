@@ -1,12 +1,12 @@
 import type { MediaFile, TimelineClip } from '@/types';
 
 /**
- * 実メディアファイル処理ユーティリティ
- * プレースホルダーから実際のファイル処理へ移行
+ * メディアファイルのメタデータ抽出/生成ユーティリティ
+ * シングルトンで利用します
  */
 export class MediaProcessor {
   private static instance: MediaProcessor;
-  
+
   public static getInstance(): MediaProcessor {
     if (!MediaProcessor.instance) {
       MediaProcessor.instance = new MediaProcessor();
@@ -15,7 +15,7 @@ export class MediaProcessor {
   }
 
   /**
-   * メディアファイルから実際のメタデータを抽出
+   * メディアファイルからメタデータを抽出
    */
   async extractMediaMetadata(file: File): Promise<{
     width?: number;
@@ -29,7 +29,7 @@ export class MediaProcessor {
     const url = URL.createObjectURL(file);
     const mimeType = file.type || '';
     const format = this.getFileFormat(file.name, mimeType);
-    
+
     try {
       if (mimeType.startsWith('video/')) {
         return await this.extractVideoMetadata(url, file.size, format, mimeType);
@@ -46,60 +46,81 @@ export class MediaProcessor {
   }
 
   /**
-   * 動画メタデータの抽出
+   * 動画メタデータの抽出（簡易）
    */
   private async extractVideoMetadata(
-    url: string, 
-    size: number, 
-    format: string, 
+    url: string,
+    size: number,
+    format: string,
     mimeType: string
   ): Promise<any> {
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
       video.preload = 'metadata';
-      
-      video.onloadedmetadata = () => {
+      video.src = url;
+
+      const onLoaded = () => {
         // サムネイル生成
         const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
+        const ctx = canvas.getContext('2d')!;
         canvas.width = 160;
         canvas.height = 90;
-        
-        video.currentTime = Math.min(1, video.duration / 2); // 中間点でサムネイル
-        
-        video.onseeked = () => {
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
-            
-            resolve({
-              width: video.videoWidth,
-              height: video.videoHeight,
-              duration: video.duration,
-              format,
-              size,
-              mimeType,
-              thumbnail
-            });
-          } else {
-            resolve({
-              width: video.videoWidth,
-              height: video.videoHeight,
-              duration: video.duration,
-              format,
-              size,
-              mimeType
-            });
-          }
+
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
         };
+
+        try {
+          // 中間フレームにシークしてから描画
+          const capture = () => {
+            try {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+              cleanup();
+              resolve({
+                width: video.videoWidth,
+                height: video.videoHeight,
+                duration: video.duration,
+                format,
+                size,
+                mimeType,
+                thumbnail
+              });
+            } catch {
+              cleanup();
+              resolve({
+                width: video.videoWidth,
+                height: video.videoHeight,
+                duration: video.duration,
+                format,
+                size,
+                mimeType
+              });
+            }
+          };
+
+          video.currentTime = Math.min(1, Math.max(0, video.duration / 2));
+          video.onseeked = capture;
+        } catch {
+          cleanup();
+          resolve({
+            width: video.videoWidth,
+            height: video.videoHeight,
+            duration: video.duration,
+            format,
+            size,
+            mimeType
+          });
+        }
       };
-      
-      video.onerror = () => {
+
+      const onError = () => {
         reject(new Error('Failed to load video metadata'));
       };
-      
-      video.src = url;
+
+      video.addEventListener('loadedmetadata', onLoaded);
+      video.addEventListener('error', onError);
     });
   }
 
@@ -107,14 +128,13 @@ export class MediaProcessor {
    * 画像メタデータの抽出
    */
   private async extractImageMetadata(
-    url: string, 
-    size: number, 
-    format: string, 
+    url: string,
+    size: number,
+    format: string,
     mimeType: string
   ): Promise<any> {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      
       img.onload = () => {
         resolve({
           width: img.naturalWidth,
@@ -122,14 +142,10 @@ export class MediaProcessor {
           format,
           size,
           mimeType,
-          thumbnail: url // 画像自体をサムネイルとして使用
+          thumbnail: url // 画像自体をサムネイルとして利用
         });
       };
-      
-      img.onerror = () => {
-        reject(new Error('Failed to load image metadata'));
-      };
-      
+      img.onerror = () => reject(new Error('Failed to load image metadata'));
       img.src = url;
     });
   }
@@ -138,15 +154,14 @@ export class MediaProcessor {
    * 音声メタデータの抽出
    */
   private async extractAudioMetadata(
-    url: string, 
-    size: number, 
-    format: string, 
+    url: string,
+    size: number,
+    format: string,
     mimeType: string
   ): Promise<any> {
     return new Promise((resolve, reject) => {
       const audio = new Audio();
       audio.preload = 'metadata';
-      
       audio.onloadedmetadata = () => {
         resolve({
           duration: audio.duration,
@@ -155,11 +170,7 @@ export class MediaProcessor {
           mimeType
         });
       };
-      
-      audio.onerror = () => {
-        reject(new Error('Failed to load audio metadata'));
-      };
-      
+      audio.onerror = () => reject(new Error('Failed to load audio metadata'));
       audio.src = url;
     });
   }
@@ -170,11 +181,11 @@ export class MediaProcessor {
   private getFileFormat(filename: string, mimeType: string): string {
     // ファイル名から拡張子を取得
     const extension = filename.split('.').pop()?.toLowerCase();
-    
+
     if (extension) {
       return extension;
     }
-    
+
     // MIMEタイプから推測
     const mimeToFormat: Record<string, string> = {
       'video/mp4': 'mp4',
@@ -193,20 +204,20 @@ export class MediaProcessor {
       'audio/aac': 'aac',
       'audio/mp4': 'm4a'
     };
-    
+
     return mimeToFormat[mimeType] || 'unknown';
   }
 
   /**
-   * MediaFileオブジェクトを作成 - 原始Fileオブジェクトも保持
+   * MediaFile を作成（原始 File も保持）
    */
   async createMediaFile(file: File): Promise<MediaFile> {
     const metadata = await this.extractMediaMetadata(file);
-    const url = URL.createObjectURL(file); // Blob URLを作成（削除しない）
+    const url = URL.createObjectURL(file); // 呼び出し側で適切に revoke してください
     const type = this.getMediaType(metadata.mimeType);
-    
+
     return {
-      id: `media_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `media_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       name: file.name,
       type,
       url,
@@ -217,7 +228,7 @@ export class MediaProcessor {
       duration: metadata.duration,
       format: metadata.format,
       uploadedAt: new Date(),
-      originalFile: file, // 原始Fileオブジェクトを保持
+      originalFile: file,
       metadata: {
         mimeType: metadata.mimeType,
         originalName: file.name,
@@ -230,57 +241,48 @@ export class MediaProcessor {
    * メディアタイプを判定
    */
   private getMediaType(mimeType: string): 'video' | 'image' | 'audio' {
-    if (mimeType.startsWith('video/')) {
-      return 'video';
-    } else if (mimeType.startsWith('image/')) {
-      return 'image';
-    } else if (mimeType.startsWith('audio/')) {
-      return 'audio';
-    } else {
-      throw new Error(`Unsupported media type: ${mimeType}`);
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    throw new Error(`Unsupported media type: ${mimeType}`);
     }
-  }
 
   /**
-   * ファイルサイズを人間が読みやすい形式に変換
+   * ファイルサイズの整形
    */
   formatFileSize(bytes: number): string {
     const units = ['B', 'KB', 'MB', 'GB'];
     let size = bytes;
     let unitIndex = 0;
-    
+
     while (size >= 1024 && unitIndex < units.length - 1) {
       size /= 1024;
       unitIndex++;
     }
-    
+
     return `${size.toFixed(1)} ${units[unitIndex]}`;
   }
 
   /**
-   * 時間を人間が読みやすい形式に変換
+   * 時間の整形
    */
   formatDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    
+
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    } else {
-      return `${minutes}:${secs.toString().padStart(2, '0')}`;
     }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   }
 
   /**
-   * 解像度を文字列で表現
+   * 解像度の整形
    */
   formatResolution(width?: number, height?: number): string {
-    if (!width || !height) {
-      return 'Unknown';
-    }
-    
-    // 一般的な解像度名を返す
+    if (!width || !height) return 'Unknown';
+
     const resolutionNames: Record<string, string> = {
       '1920x1080': 'Full HD (1080p)',
       '1280x720': 'HD (720p)',
@@ -290,9 +292,9 @@ export class MediaProcessor {
       '720x1280': 'Vertical 720p',
       '1080x1080': 'Square HD'
     };
-    
+
     const key = `${width}x${height}`;
-    return resolutionNames[key] || `${width} × ${height}`;
+    return resolutionNames[key] || `${width} x ${height}`;
   }
 
   /**
@@ -304,8 +306,8 @@ export class MediaProcessor {
     warnings?: string[];
   } {
     const warnings: string[] = [];
-    
-    // ファイルサイズチェック (100MB制限)
+
+    // ファイルサイズチェック (100MB 制限)
     const maxSize = 100 * 1024 * 1024;
     if (file.size > maxSize) {
       return {
@@ -313,26 +315,26 @@ export class MediaProcessor {
         error: `ファイルサイズが制限を超えています (最大: ${this.formatFileSize(maxSize)})`
       };
     }
-    
-    // ファイルサイズ警告 (50MB以上)
+
+    // ファイルサイズ警告 (50MB 超)
     if (file.size > 50 * 1024 * 1024) {
       warnings.push('大きなファイルです。処理に時間がかかる場合があります。');
     }
-    
+
     // 対応形式チェック
     const supportedTypes = [
       'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo',
       'image/jpeg', 'image/png', 'image/gif', 'image/webp',
       'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/mp4'
     ];
-    
+
     if (!supportedTypes.includes(file.type)) {
       return {
         isValid: false,
-        error: `対応していないファイル形式です: ${file.type}`
+        error: `対応していないファイル形式です: ${file.type || 'unknown'}`
       };
     }
-    
+
     return {
       isValid: true,
       warnings: warnings.length > 0 ? warnings : undefined
@@ -340,36 +342,37 @@ export class MediaProcessor {
   }
 
   /**
-   * TimelineClipを作成
+   * TimelineClip を作成
    */
   createTimelineClip(
-    mediaFile: MediaFile, 
-    startTime: number = 0, 
+    mediaFile: MediaFile,
+    startTime: number = 0,
     layer: number = 0
   ): TimelineClip {
-    const duration = mediaFile.duration || (mediaFile.type === 'image' ? 5 : 10); // 画像はデフォルト5秒
-    
+    const duration = mediaFile.duration ?? (mediaFile.type === 'image' ? 5 : 10);
     return {
-      id: `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `clip_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       mediaId: mediaFile.id,
       startTime,
       duration,
       trimStart: 0,
       trimEnd: duration,
       layer,
-      effects: mediaFile.type === 'image' ? [
-        {
-          id: `effect_${Date.now()}`,
-          type: 'pan_zoom',
-          parameters: { zoom: 1.1, panX: 0, panY: 0 },
-          enabled: true
-        }
-      ] : undefined
+      effects: mediaFile.type === 'image'
+        ? [
+            {
+              id: `effect_${Date.now()}`,
+              type: 'pan_zoom',
+              parameters: { zoom: 1.1, panX: 0, panY: 0 },
+              enabled: true
+            }
+          ]
+        : undefined
     };
   }
 
   /**
-   * リソースをクリーンアップ
+   * リソースの解放
    */
   cleanupMediaFile(mediaFile: MediaFile): void {
     if (mediaFile.url && mediaFile.url.startsWith('blob:')) {
@@ -394,8 +397,8 @@ export function validateFile(file: File) {
 }
 
 export function createClipFromMedia(
-  mediaFile: MediaFile, 
-  startTime?: number, 
+  mediaFile: MediaFile,
+  startTime?: number,
   layer?: number
 ): TimelineClip {
   return mediaProcessor.createTimelineClip(mediaFile, startTime, layer);

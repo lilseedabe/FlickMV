@@ -2,13 +2,13 @@ import { MusicPreset, PresetCategory, EditRecipe, SNSPreset, FrequencyTrigger } 
 
 /**
  * 音楽プリセットのサンプルデータ
- * 初心者向けに説明付きで各プリセットを定義
+ * 初学者向けに説明付きでプリセットを定義
  */
 export const SAMPLE_PRESETS: MusicPreset[] = [
   {
     id: 'summer_vibes',
     name: 'Summer Vibes',
-    description: '明るく爽やかな夏のムードを演出。ポップやダンスミュージックに最適',
+    description: '明るく爽やかな夏のムードを演出。ダンスやポップミュージックに最適',
     genre: 'Pop',
     bpmRange: [120, 140],
     thumbnail: 'https://via.placeholder.com/200x150/ff6b6b/ffffff?text=Summer',
@@ -53,7 +53,7 @@ export const SAMPLE_PRESETS: MusicPreset[] = [
   {
     id: 'lo_fi_chill',
     name: 'Lo-fi Chill',
-    description: '落ち着いたムード。チルアウトやローファイヒップホップに適したレトロ感',
+    description: '落ち着いたチルアウト系。ローファイ・ヒップホップに適したレトロ感',
     genre: 'Lo-fi',
     bpmRange: [70, 100],
     thumbnail: 'https://via.placeholder.com/200x150/8b5cf6/ffffff?text=Lo-fi',
@@ -92,7 +92,7 @@ export const SAMPLE_PRESETS: MusicPreset[] = [
   {
     id: 'electronic_drop',
     name: 'Electronic Drop',
-    description: 'EDMやエレクトロニック向け。ドロップ部分で強烈なビジュアルエフェクト',
+    description: 'EDM/エレクトロ向け。ドロップで強烈なビジュアルエフェクトを展開',
     genre: 'Electronic',
     bpmRange: [128, 150],
     thumbnail: 'https://via.placeholder.com/200x150/06b6d4/ffffff?text=Electronic',
@@ -137,7 +137,7 @@ export const SAMPLE_PRESETS: MusicPreset[] = [
   {
     id: 'cinematic_epic',
     name: 'Cinematic Epic',
-    description: '映画的で壮大な演出。オーケストラやトレーラー音楽向け',
+    description: '映画のように壮大な演出。オーケストラ系トレーラー音楽向け',
     genre: 'Cinematic',
     bpmRange: [80, 120],
     thumbnail: 'https://via.placeholder.com/200x150/f59e0b/ffffff?text=Cinematic',
@@ -221,7 +221,7 @@ export const SAMPLE_CATEGORIES: PresetCategory[] = [
   {
     id: 'pop',
     name: 'Pop',
-    description: 'ポップで明るいムード',
+    description: 'ポップで明るいイメージ',
     icon: 'music',
     color: '#ff6b6b',
     presets: SAMPLE_PRESETS.filter(p => p.genre === 'Pop')
@@ -267,7 +267,7 @@ export const SAMPLE_RECIPES: EditRecipe[] = [
   {
     id: 'beat_cut',
     name: 'ビートカット',
-    description: '音楽のビートに合わせて映像を自動カット。リズム感のある編集が簡単に',
+    description: '音楽のビートに合わせて映像を自動カット。リズム感のある編集を簡単に',
     icon: 'scissors',
     category: 'cutting',
     difficulty: 'beginner',
@@ -312,7 +312,7 @@ export const SAMPLE_RECIPES: EditRecipe[] = [
   {
     id: 'shake_effect',
     name: 'シェイクエフェクト',
-    description: 'ドロップやビートで画面を揺らす。インパクトのある瞬間を強調',
+    description: 'ドロップのタイミングで画面を揺らす。インパクトのある瞬間を強調',
     icon: 'zap',
     category: 'effects',
     difficulty: 'intermediate',
@@ -342,8 +342,8 @@ export const SAMPLE_RECIPES: EditRecipe[] = [
   },
   {
     id: 'auto_ken_burns',
-    name: 'オートケンバーンズ',
-    description: 'BPMに同期したパン&ズーム。静止画にも動きを追加',
+    name: 'オート・ケンバーンズ',
+    description: 'BPMに同期したパン＆ズーム。静止画にも動きを追加',
     icon: 'move',
     category: 'animation',
     difficulty: 'advanced',
@@ -374,8 +374,8 @@ export const SAMPLE_RECIPES: EditRecipe[] = [
   },
   {
     id: 'bass_drop_effect',
-    name: 'ベースドロップエフェクト',
-    description: '低音域の急激な変化に反応。EDMのドロップ部分で大きなインパクト',
+    name: 'ベースドロップ・エフェクト',
+    description: '低音域の急激な変化に反応し、EDMのドロップで大きなインパクトを与える',
     icon: 'volume-x',
     category: 'effects',
     difficulty: 'advanced',

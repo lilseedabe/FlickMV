@@ -23,11 +23,79 @@ import {
 import type { Timeline as TimelineType, TimelineClip, AudioTrack, Transition } from '@/types';
 import WaveformDisplay from '../waveform/WaveformDisplay';
 
-// 新しい共通フックをインポート
-import {
-  useTimelineScale,
-  useTimelineDrag
-} from '../../hooks/timeline';
+// Custom hooks for timeline functionality
+const useTimelineScale = ({ zoom, basePixelsPerSecond = 40, minPixelsPerSecond = 10, maxPixelsPerSecond = 160 }) => {
+  const pixelsPerSecond = Math.max(minPixelsPerSecond, Math.min(maxPixelsPerSecond, basePixelsPerSecond * zoom));
+  
+  const timeToPixel = useCallback((time: number) => {
+    return time * pixelsPerSecond;
+  }, [pixelsPerSecond]);
+  
+  const pixelToTime = useCallback((pixel: number) => {
+    return pixel / pixelsPerSecond;
+  }, [pixelsPerSecond]);
+  
+  return { pixelsPerSecond, timeToPixel, pixelToTime };
+};
+
+const useTimelineDrag = ({ enabled, throttle, onDragStart, onDragMove, onDragEnd }) => {
+  const [dragState, setDragState] = useState({ isDragging: false, startX: 0, startY: 0 });
+  const elementRef = useRef(null);
+  
+  const registerElement = useCallback((element: HTMLElement) => {
+    elementRef.current = element;
+  }, []);
+  
+  useEffect(() => {
+    if (!enabled || !elementRef.current) return;
+    
+    const handlePointerDown = (e: PointerEvent) => {
+      if (!onDragStart) return;
+      
+      setDragState({ isDragging: true, startX: e.clientX, startY: e.clientY });
+      onDragStart(e);
+    };
+    
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!dragState.isDragging || !onDragMove) return;
+      
+      const deltaX = e.clientX - dragState.startX;
+      const deltaY = e.clientY - dragState.startY;
+      
+      if (throttle) {
+        requestAnimationFrame(() => onDragMove(e, deltaX, deltaY));
+      } else {
+        onDragMove(e, deltaX, deltaY);
+      }
+    };
+    
+    const handlePointerUp = (e: PointerEvent) => {
+      if (dragState.isDragging && onDragEnd) {
+        onDragEnd(e);
+      }
+      setDragState({ isDragging: false, startX: 0, startY: 0 });
+    };
+    
+    const element = elementRef.current;
+    if (element) {
+      element.addEventListener('pointerdown', handlePointerDown);
+      document.addEventListener('pointermove', handlePointerMove);
+      document.addEventListener('pointerup', handlePointerUp);
+      
+      return () => {
+        element.removeEventListener('pointerdown', handlePointerDown);
+        document.removeEventListener('pointermove', handlePointerMove);
+        document.removeEventListener('pointerup', handlePointerUp);
+      };
+    }
+  }, [enabled, dragState, onDragStart, onDragMove, onDragEnd, throttle]);
+  
+  return {
+    dragState,
+    registerElement,
+    isDragging: dragState.isDragging
+  };
+};
 
 interface TimelineProps {
   timeline: TimelineType;
@@ -180,7 +248,7 @@ const Timeline: React.FC<TimelineProps> = ({
     };
     
     onTimelineUpdate(updatedTimeline);
-    console.log(`✂️ Clip split: ${selectedClip.id} → ${leftClip.id} + ${rightClip.id}`);
+    console.log(`✂︎ Clip split: ${selectedClip.id} → ${leftClip.id} + ${rightClip.id}`);
   }, [selectedClipId, timeline, playheadPosition, onTimelineUpdate]);
 
   // クリップコピー機能

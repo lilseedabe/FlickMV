@@ -224,7 +224,7 @@ export const EFFECT_PRESETS: EffectPreset[] = [
   // モーションエフェクト
   {
     id: 'smooth_pan_zoom',
-    name: 'スムーズ パン＆ズーム',
+    name: 'スムーズ パン&ズーム',
     description: '滑らかなカメラワーク風エフェクト',
     category: 'motion',
     difficulty: 'intermediate',
@@ -241,7 +241,7 @@ export const EFFECT_PRESETS: EffectPreset[] = [
 
   {
     id: 'speed_ramp',
-    name: 'スピード ランプ',
+    name: 'スピードランプ',
     description: '動きにメリハリをつけるスピード調整',
     category: 'motion',
     difficulty: 'advanced',

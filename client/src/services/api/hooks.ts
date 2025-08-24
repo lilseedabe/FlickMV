@@ -1,5 +1,5 @@
 import React from 'react';
-import { useQuery, useMutation, useQueryClient, UseQueryOptions, UseMutationOptions } from 'react-query';
+import { useQuery, useMutation, useQueryClient, UseQueryOptions, UseMutationOptions } from '@tanstack/react-query';
 import { 
   authAPI, 
   userAPI, 
@@ -72,71 +72,63 @@ const handleMutationError = (error: unknown): void => {
 // ==================== USER HOOKS ====================
 
 export const useCurrentUser = (options?: UseQueryOptions<User, APIError>) => {
-  return useQuery<User, APIError>(
-    queryKeys.user,
-    userAPI.getCurrentUser,
-    {
-      staleTime: 5 * 60 * 1000, // 5分間はキャッシュを使用
-      cacheTime: 10 * 60 * 1000, // 10分間キャッシュを保持
-      retry: (failureCount, error) => {
-        // 認証エラーの場合はリトライしない
-        if (error.status === 401 || error.status === 403) {
-          return false;
-        }
-        return failureCount < 3;
-      },
-      ...options,
-    }
-  );
+  return useQuery<User, APIError>({
+    queryKey: queryKeys.user,
+    queryFn: userAPI.getCurrentUser,
+    staleTime: 5 * 60 * 1000, // 5分間はキャッシュを使用
+    gcTime: 10 * 60 * 1000, // 10分間キャッシュを保持
+    retry: (failureCount, error: any) => {
+      // 認証エラーの場合はリトライしない
+      if ((error as APIError)?.status === 401 || (error as APIError)?.status === 403) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    ...(options as any),
+  });
 };
 
 export const useUpdateProfile = (options?: UseMutationOptions<User, APIError, Partial<User>>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<User, APIError, Partial<User>>(
-    userAPI.updateProfile,
-    {
-      onSuccess: (updatedUser) => {
-        // ユーザーデータを更新
-        queryClient.setQueryData(queryKeys.user, updatedUser);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<User, APIError, Partial<User>>({
+    mutationFn: userAPI.updateProfile,
+    onSuccess: (updatedUser) => {
+      // ユーザーデータを更新
+      queryClient.setQueryData(queryKeys.user, updatedUser);
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 export const useNotifications = (options?: UseQueryOptions<Notification[], APIError>) => {
-  return useQuery<Notification[], APIError>(
-    queryKeys.userNotifications,
-    userAPI.getNotifications,
-    {
-      staleTime: 1 * 60 * 1000, // 1分間
-      refetchInterval: 5 * 60 * 1000, // 5分ごとに自動更新
-      ...options,
-    }
-  );
+  return useQuery<Notification[], APIError>({
+    queryKey: queryKeys.userNotifications,
+    queryFn: userAPI.getNotifications,
+    staleTime: 1 * 60 * 1000, // 1分間
+    refetchInterval: 5 * 60 * 1000, // 5分ごとに自動更新
+    ...(options as any),
+  });
 };
 
 export const useMarkNotificationAsRead = () => {
   const queryClient = useQueryClient();
   
-  return useMutation<void, APIError, string>(
-    userAPI.markNotificationAsRead,
-    {
-      onSuccess: (_, notificationId) => {
-        // 通知リストを更新
-        queryClient.setQueryData<Notification[]>(
-          queryKeys.userNotifications,
-          (old) => old?.map(notif => 
-            notif.id === notificationId 
-              ? { ...notif, unread: false }
-              : notif
-          ) || []
-        );
-      },
-    }
-  );
+  return useMutation<void, APIError, string>({
+    mutationFn: userAPI.markNotificationAsRead,
+    onSuccess: (_, notificationId) => {
+      // 通知リストを更新
+      queryClient.setQueryData<Notification[]>(
+        queryKeys.userNotifications,
+        (old) => old?.map(notif => 
+          notif.id === notificationId 
+            ? { ...notif, unread: false }
+            : notif
+        ) || []
+      );
+    },
+  });
 };
 
 // ==================== AUTH HOOKS ====================
@@ -144,51 +136,45 @@ export const useMarkNotificationAsRead = () => {
 export const useLogin = (options?: UseMutationOptions<{ user: User; token: string }, APIError, LoginForm>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<{ user: User; token: string }, APIError, LoginForm>(
-    authAPI.login,
-    {
-      onSuccess: (data) => {
-        // ユーザーデータをキャッシュに保存
-        queryClient.setQueryData(queryKeys.user, data.user);
-        // トークンを保存（実際の実装では localStorage や secure cookie に保存）
-        localStorage.setItem('authToken', data.token);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<{ user: User; token: string }, APIError, LoginForm>({
+    mutationFn: authAPI.login,
+    onSuccess: (data) => {
+      // ユーザーデータをキャッシュに保存
+      queryClient.setQueryData(queryKeys.user, data.user);
+      // トークンを保存（実際の実装では localStorage や secure cookie に保存）
+      localStorage.setItem('authToken', data.token);
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 export const useRegister = (options?: UseMutationOptions<{ user: User; token: string }, APIError, RegisterForm>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<{ user: User; token: string }, APIError, RegisterForm>(
-    authAPI.register,
-    {
-      onSuccess: (data) => {
-        queryClient.setQueryData(queryKeys.user, data.user);
-        localStorage.setItem('authToken', data.token);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<{ user: User; token: string }, APIError, RegisterForm>({
+    mutationFn: authAPI.register,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.user, data.user);
+      localStorage.setItem('authToken', data.token);
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 export const useLogout = (options?: UseMutationOptions<void, APIError, void>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<void, APIError, void>(
-    authAPI.logout,
-    {
-      onSuccess: () => {
-        // すべてのキャッシュをクリア
-        queryClient.clear();
-        localStorage.removeItem('authToken');
-      },
-      ...options,
-    }
-  );
+  return useMutation<void, APIError, void>({
+    mutationFn: authAPI.logout,
+    onSuccess: () => {
+      // すべてのキャッシュをクリア
+      queryClient.clear();
+      localStorage.removeItem('authToken');
+    },
+    ...(options as any),
+  });
 };
 
 // ==================== PROJECT HOOKS ====================
@@ -198,84 +184,73 @@ export const useProjects = (
   limit: number = 20,
   options?: UseQueryOptions<PaginatedResponse<Project>, APIError>
 ) => {
-  return useQuery<PaginatedResponse<Project>, APIError>(
-    queryKeys.projectList(page, limit),
-    () => projectAPI.getProjects(page, limit),
-    {
-      staleTime: 2 * 60 * 1000, // 2分間
-      keepPreviousData: true, // ページネーション時にPreviousデータを保持
-      ...options,
-    }
-  );
+  return useQuery<PaginatedResponse<Project>, APIError>({
+    queryKey: queryKeys.projectList(page, limit),
+    queryFn: () => projectAPI.getProjects(page, limit),
+    staleTime: 2 * 60 * 1000, // 2分間
+    ...(options as any),
+  });
 };
 
 export const useProject = (
   projectId: string,
   options?: UseQueryOptions<Project, APIError>
 ) => {
-  return useQuery<Project, APIError>(
-    queryKeys.project(projectId),
-    () => projectAPI.getProject(projectId),
-    {
-      staleTime: 1 * 60 * 1000, // 1分間
-      enabled: !!projectId, // projectIdがある場合のみクエリを実行
-      ...options,
-    }
-  );
+  return useQuery<Project, APIError>({
+    queryKey: queryKeys.project(projectId),
+    queryFn: () => projectAPI.getProject(projectId),
+    staleTime: 1 * 60 * 1000, // 1分間
+    enabled: !!projectId, // projectIdがある場合のみクエリを実行
+    ...(options as any),
+  });
 };
 
 export const useCreateProject = (options?: UseMutationOptions<Project, APIError, ProjectForm>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<Project, APIError, ProjectForm>(
-    projectAPI.createProject,
-    {
-      onSuccess: (newProject) => {
-        // プロジェクトリストを無効化して再フェッチ
-        queryClient.invalidateQueries(queryKeys.projects);
-        // 新しいプロジェクトをキャッシュに追加
-        queryClient.setQueryData(queryKeys.project(newProject.id), newProject);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<Project, APIError, ProjectForm>({
+    mutationFn: projectAPI.createProject,
+    onSuccess: (newProject) => {
+      // プロジェクトリストを無効化して再フェッチ
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      // 新しいプロジェクトをキャッシュに追加
+      queryClient.setQueryData(queryKeys.project(newProject.id), newProject);
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 export const useUpdateProject = (options?: UseMutationOptions<Project, APIError, { id: string; updates: Partial<Project> }>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<Project, APIError, { id: string; updates: Partial<Project> }>(
-    ({ id, updates }) => projectAPI.updateProject(id, updates),
-    {
-      onSuccess: (updatedProject) => {
-        // 個別プロジェクトのキャッシュを更新
-        queryClient.setQueryData(queryKeys.project(updatedProject.id), updatedProject);
-        // プロジェクトリストも無効化
-        queryClient.invalidateQueries(queryKeys.projects);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<Project, APIError, { id: string; updates: Partial<Project> }>({
+    mutationFn: ({ id, updates }) => projectAPI.updateProject(id, updates),
+    onSuccess: (updatedProject) => {
+      // 個別プロジェクトのキャッシュを更新
+      queryClient.setQueryData(queryKeys.project(updatedProject.id), updatedProject);
+      // プロジェクトリストも無効化
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 export const useDeleteProject = (options?: UseMutationOptions<void, APIError, string>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<void, APIError, string>(
-    projectAPI.deleteProject,
-    {
-      onSuccess: (_, projectId) => {
-        // プロジェクトのキャッシュを削除
-        queryClient.removeQueries(queryKeys.project(projectId));
-        // プロジェクトリストを無効化
-        queryClient.invalidateQueries(queryKeys.projects);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<void, APIError, string>({
+    mutationFn: projectAPI.deleteProject,
+    onSuccess: (_, projectId) => {
+      // プロジェクトのキャッシュを削除
+      queryClient.removeQueries({ queryKey: queryKeys.project(projectId) });
+      // プロジェクトリストを無効化
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 // ==================== MEDIA HOOKS ====================
@@ -284,14 +259,12 @@ export const useMediaFiles = (
   projectId?: string,
   options?: UseQueryOptions<MediaFile[], APIError>
 ) => {
-  return useQuery<MediaFile[], APIError>(
-    queryKeys.mediaList(projectId),
-    () => mediaAPI.getMediaFiles(projectId),
-    {
-      staleTime: 30 * 1000, // 30秒間
-      ...options,
-    }
-  );
+  return useQuery<MediaFile[], APIError>({
+    queryKey: queryKeys.mediaList(projectId),
+    queryFn: () => mediaAPI.getMediaFiles(projectId),
+    staleTime: 30 * 1000, // 30秒間
+    ...(options as any),
+  });
 };
 
 export const useUploadMedia = (options?: {
@@ -300,34 +273,30 @@ export const useUploadMedia = (options?: {
 }) => {
   const queryClient = useQueryClient();
   
-  return useMutation<MediaFile, APIError, { file: File; projectId?: string }>(
-    ({ file, projectId }) => mediaAPI.uploadMedia(file, projectId, options?.onProgress),
-    {
-      onSuccess: (newMedia, { projectId }) => {
-        // メディアリストを無効化
-        queryClient.invalidateQueries(queryKeys.mediaList(projectId));
-        queryClient.invalidateQueries(queryKeys.media);
-      },
-      onError: handleMutationError,
-      ...options?.mutationOptions,
-    }
-  );
+  return useMutation<MediaFile, APIError, { file: File; projectId?: string }>({
+    mutationFn: ({ file, projectId }) => mediaAPI.uploadMedia(file, projectId, options?.onProgress),
+    onSuccess: (newMedia, { projectId }) => {
+      // メディアリストを無効化
+      queryClient.invalidateQueries({ queryKey: queryKeys.mediaList(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.media });
+    },
+    onError: handleMutationError,
+    ...(options?.mutationOptions as any),
+  });
 };
 
 export const useDeleteMedia = (options?: UseMutationOptions<void, APIError, string>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<void, APIError, string>(
-    mediaAPI.deleteMedia,
-    {
-      onSuccess: () => {
-        // すべてのメディアクエリを無効化
-        queryClient.invalidateQueries(queryKeys.media);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<void, APIError, string>({
+    mutationFn: mediaAPI.deleteMedia,
+    onSuccess: () => {
+      // すべてのメディアクエリを無効化
+      queryClient.invalidateQueries({ queryKey: queryKeys.media });
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 // ==================== EXPORT HOOKS ====================
@@ -335,38 +304,32 @@ export const useDeleteMedia = (options?: UseMutationOptions<void, APIError, stri
 export const useCreateExport = (options?: UseMutationOptions<ExportJob, APIError, { projectId: string; settings: ExportForm }>) => {
   const queryClient = useQueryClient();
   
-  return useMutation<ExportJob, APIError, { projectId: string; settings: ExportForm }>(
-    ({ projectId, settings }) => exportAPI.createExportJob(projectId, settings),
-    {
-      onSuccess: () => {
-        // エクスポート履歴を無効化
-        queryClient.invalidateQueries(queryKeys.exports);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<ExportJob, APIError, { projectId: string; settings: ExportForm }>({
+    mutationFn: ({ projectId, settings }) => exportAPI.createExportJob(projectId, settings),
+    onSuccess: () => {
+      // エクスポート履歴を無効化
+      queryClient.invalidateQueries({ queryKey: queryKeys.exports });
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 export const useExportJob = (
   jobId: string,
   options?: UseQueryOptions<ExportJob, APIError>
 ) => {
-  return useQuery<ExportJob, APIError>(
-    queryKeys.exportJob(jobId),
-    () => exportAPI.getExportJob(jobId),
-    {
-      refetchInterval: (data) => {
-        // 処理中の場合は5秒ごとに更新
-        if (data?.status === 'processing' || data?.status === 'queued') {
-          return 5000;
-        }
-        return false;
-      },
-      enabled: !!jobId,
-      ...options,
-    }
-  );
+  return useQuery<ExportJob, APIError>({
+    queryKey: queryKeys.exportJob(jobId),
+    queryFn: () => exportAPI.getExportJob(jobId),
+    // TanStack Query v5: refetchInterval のコールバック引数は Query
+    refetchInterval: (query) => {
+      const status = (query.state.data as ExportJob | undefined)?.status;
+      return status === 'processing' || status === 'queued' ? 5000 : false;
+    },
+    enabled: !!jobId,
+    ...(options as any),
+  });
 };
 
 export const useExportHistory = (
@@ -374,15 +337,12 @@ export const useExportHistory = (
   limit: number = 20,
   options?: UseQueryOptions<PaginatedResponse<ExportJob>, APIError>
 ) => {
-  return useQuery<PaginatedResponse<ExportJob>, APIError>(
-    queryKeys.exportHistory(page, limit),
-    () => exportAPI.getExportHistory(page, limit),
-    {
-      staleTime: 1 * 60 * 1000, // 1分間
-      keepPreviousData: true,
-      ...options,
-    }
-  );
+  return useQuery<PaginatedResponse<ExportJob>, APIError>({
+    queryKey: queryKeys.exportHistory(page, limit),
+    queryFn: () => exportAPI.getExportHistory(page, limit),
+    staleTime: 1 * 60 * 1000, // 1分間
+    ...(options as any),
+  });
 };
 
 // ==================== TEMPLATE HOOKS ====================
@@ -393,26 +353,21 @@ export const useTemplates = (
 ) => {
   const { category, difficulty, page = 1, limit = 20 } = filters;
   
-  return useQuery<PaginatedResponse<Template>, APIError>(
-    queryKeys.templateList(category, difficulty, page),
-    () => templateAPI.getTemplates(category, difficulty, page, limit),
-    {
-      staleTime: 10 * 60 * 1000, // 10分間（テンプレートは変更頻度が低い）
-      keepPreviousData: true,
-      ...options,
-    }
-  );
+  return useQuery<PaginatedResponse<Template>, APIError>({
+    queryKey: queryKeys.templateList(category, difficulty, page),
+    queryFn: () => templateAPI.getTemplates(category, difficulty, page, limit),
+    staleTime: 10 * 60 * 1000, // 10分間（テンプレートは変更頻度が低い）
+    ...(options as any),
+  });
 };
 
 export const useFeaturedTemplates = (options?: UseQueryOptions<Template[], APIError>) => {
-  return useQuery<Template[], APIError>(
-    queryKeys.featuredTemplates,
-    templateAPI.getFeaturedTemplates,
-    {
-      staleTime: 30 * 60 * 1000, // 30分間
-      ...options,
-    }
-  );
+  return useQuery<Template[], APIError>({
+    queryKey: queryKeys.featuredTemplates,
+    queryFn: templateAPI.getFeaturedTemplates,
+    staleTime: 30 * 60 * 1000, // 30分間
+    ...(options as any),
+  });
 };
 
 export const useCreateProjectFromTemplate = (
@@ -420,55 +375,47 @@ export const useCreateProjectFromTemplate = (
 ) => {
   const queryClient = useQueryClient();
   
-  return useMutation<Project, APIError, { templateId: string; projectName: string }>(
-    ({ templateId, projectName }) => templateAPI.createProjectFromTemplate(templateId, projectName),
-    {
-      onSuccess: (newProject) => {
-        // プロジェクトリストを無効化
-        queryClient.invalidateQueries(queryKeys.projects);
-        // 新しいプロジェクトをキャッシュに設定
-        queryClient.setQueryData(queryKeys.project(newProject.id), newProject);
-      },
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<Project, APIError, { templateId: string; projectName: string }>({
+    mutationFn: ({ templateId, projectName }) => templateAPI.createProjectFromTemplate(templateId, projectName),
+    onSuccess: (newProject) => {
+      // プロジェクトリストを無効化
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      // 新しいプロジェクトをキャッシュに設定
+      queryClient.setQueryData(queryKeys.project(newProject.id), newProject);
+    },
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 // ==================== BILLING HOOKS ====================
 
 export const usePlans = (options?: UseQueryOptions<any[], APIError>) => {
-  return useQuery<any[], APIError>(
-    queryKeys.plans,
-    billingAPI.getPlans,
-    {
-      staleTime: 60 * 60 * 1000, // 1時間
-      ...options,
-    }
-  );
+  return useQuery<any[], APIError>({
+    queryKey: queryKeys.plans,
+    queryFn: billingAPI.getPlans,
+    staleTime: 60 * 60 * 1000, // 1時間
+    ...(options as any),
+  });
 };
 
 export const useSubscription = (options?: UseQueryOptions<any, APIError>) => {
-  return useQuery<any, APIError>(
-    queryKeys.subscription,
-    billingAPI.getCurrentSubscription,
-    {
-      staleTime: 5 * 60 * 1000, // 5分間
-      ...options,
-    }
-  );
+  return useQuery<any, APIError>({
+    queryKey: queryKeys.subscription,
+    queryFn: billingAPI.getCurrentSubscription,
+    staleTime: 5 * 60 * 1000, // 5分間
+    ...(options as any),
+  });
 };
 
 export const useCreateCheckoutSession = (
   options?: UseMutationOptions<{ url: string }, APIError, string>
 ) => {
-  return useMutation<{ url: string }, APIError, string>(
-    billingAPI.createCheckoutSession,
-    {
-      onError: handleMutationError,
-      ...options,
-    }
-  );
+  return useMutation<{ url: string }, APIError, string>({
+    mutationFn: billingAPI.createCheckoutSession,
+    onError: handleMutationError,
+    ...(options as any),
+  });
 };
 
 // ==================== CUSTOM UTILITY HOOKS ====================
@@ -481,8 +428,9 @@ export const useProjectWorkflow = () => {
   return {
     createProject: createProject.mutate,
     createFromTemplate: createFromTemplate.mutate,
-    isLoading: createProject.isLoading || createFromTemplate.isLoading,
-    error: createProject.error || createFromTemplate.error,
+    // v5 の mutation は isPending を使用
+    isLoading: createProject.isPending || createFromTemplate.isPending,
+    error: (createProject as any).error || (createFromTemplate as any).error,
   };
 };
 

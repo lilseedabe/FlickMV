@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-// ブレークポイントの定義（Tailwindと一致）
+// ブレークポイント定義（Tailwind と一致）
 export const breakpoints = {
   sm: 640,
   md: 768,
@@ -19,6 +19,8 @@ export const useScreenSize = () => {
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleResize = () => {
       setScreenSize({
         width: window.innerWidth,
@@ -33,16 +35,16 @@ export const useScreenSize = () => {
   return screenSize;
 };
 
-// ブレークポイント検出フック
+// ブレークポイント検知フック
 export const useBreakpoint = (breakpoint?: Breakpoint) => {
   const { width } = useScreenSize();
-  
+
   const isMobile = width < breakpoints.md;
   const isTablet = width >= breakpoints.md && width < breakpoints.lg;
   const isDesktop = width >= breakpoints.lg;
   const isLargeScreen = width >= breakpoints.xl;
 
-  // 特定のブレークポイント以上かチェック
+  // 特定ブレークポイント以上かチェック
   const isAbove = (bp: Breakpoint) => width >= breakpoints[bp];
   const isBelow = (bp: Breakpoint) => width < breakpoints[bp];
 
@@ -64,21 +66,23 @@ export const useBreakpoint = (breakpoint?: Breakpoint) => {
     isAbove,
     isBelow,
     current: getCurrentBreakpoint(),
-    ...(breakpoint && { [breakpoint]: isAbove(breakpoint) })
-  };
+    ...(breakpoint && { [breakpoint]: isAbove(breakpoint) }),
+  } as const;
 };
 
-// モバイル検出フック
+// モバイル検知フック
 export const useIsMobile = () => {
   const { isMobile } = useBreakpoint();
   return isMobile;
 };
 
-// タッチデバイス検出フック
+// タッチデバイス検知フック
 export const useIsTouchDevice = () => {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     const checkTouchDevice = () => {
       return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     };
@@ -89,14 +93,17 @@ export const useIsTouchDevice = () => {
   return isTouchDevice;
 };
 
-// 向き検出フック
+// 向き検知フック
 export const useOrientation = () => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleOrientationChange = () => {
-      if (screen.orientation) {
-        setOrientation(screen.orientation.angle === 0 || screen.orientation.angle === 180 ? 'portrait' : 'landscape');
+      const scr: any = (typeof screen !== 'undefined' ? screen : null);
+      if (scr && scr.orientation) {
+        setOrientation(scr.orientation.angle === 0 || scr.orientation.angle === 180 ? 'portrait' : 'landscape');
       } else {
         // フォールバック
         setOrientation(window.innerHeight > window.innerWidth ? 'portrait' : 'landscape');
@@ -105,9 +112,10 @@ export const useOrientation = () => {
 
     handleOrientationChange();
 
-    if (screen.orientation) {
-      screen.orientation.addEventListener('change', handleOrientationChange);
-      return () => screen.orientation.removeEventListener('change', handleOrientationChange);
+    const scr: any = (typeof screen !== 'undefined' ? screen : null);
+    if (scr && scr.orientation) {
+      scr.orientation.addEventListener('change', handleOrientationChange);
+      return () => scr.orientation.removeEventListener('change', handleOrientationChange);
     } else {
       window.addEventListener('resize', handleOrientationChange);
       return () => window.removeEventListener('resize', handleOrientationChange);
@@ -119,9 +127,12 @@ export const useOrientation = () => {
 
 // オンライン状態フック
 export const useIsOnline = () => {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const hasNavigator = typeof navigator !== 'undefined';
+  const [isOnline, setIsOnline] = useState(hasNavigator ? navigator.onLine : true);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -137,15 +148,16 @@ export const useIsOnline = () => {
   return isOnline;
 };
 
-// プリファーカラースキーム検出フック
+// プリファーカラースキーム検知フック
 export const usePrefersDarkMode = () => {
-  const [prefersDark, setPrefersDark] = useState(
-    () => window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
+  const initial = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+  const [prefersDark, setPrefersDark] = useState(initial);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
+
     const handleChange = (e: MediaQueryListEvent) => {
       setPrefersDark(e.matches);
     };
@@ -157,15 +169,17 @@ export const usePrefersDarkMode = () => {
   return prefersDark;
 };
 
-// 動きの削減設定検出フック
+// 動きの削減設定検知フック
 export const usePrefersReducedMotion = () => {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
-    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  const initial =
+    typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(initial);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    
+
     const handleChange = (e: MediaQueryListEvent) => {
       setPrefersReducedMotion(e.matches);
     };
@@ -187,29 +201,37 @@ export const useBatteryInfo = () => {
   } | null>(null);
 
   useEffect(() => {
-    if ('getBattery' in navigator) {
-      // @ts-ignore - Battery API は実験的機能
-      navigator.getBattery().then((battery: any) => {
-        const updateBatteryInfo = () => {
-          setBatteryInfo({
-            level: battery.level,
-            charging: battery.charging,
-            chargingTime: battery.chargingTime,
-            dischargingTime: battery.dischargingTime,
-          });
-        };
+    if (typeof navigator === 'undefined') return;
 
-        updateBatteryInfo();
+    const navAny = navigator as any;
+    if (!navAny.getBattery) return;
 
-        battery.addEventListener('chargingchange', updateBatteryInfo);
-        battery.addEventListener('levelchange', updateBatteryInfo);
+    let batteryObj: any | null = null;
 
-        return () => {
-          battery.removeEventListener('chargingchange', updateBatteryInfo);
-          battery.removeEventListener('levelchange', updateBatteryInfo);
-        };
-      });
-    }
+    navAny.getBattery().then((battery: any) => {
+      batteryObj = battery;
+
+      const updateBatteryInfo = () => {
+        setBatteryInfo({
+          level: battery.level,
+          charging: battery.charging,
+          chargingTime: battery.chargingTime,
+          dischargingTime: battery.dischargingTime,
+        });
+      };
+
+      updateBatteryInfo();
+
+      battery.addEventListener('chargingchange', updateBatteryInfo);
+      battery.addEventListener('levelchange', updateBatteryInfo);
+    });
+
+    return () => {
+      if (batteryObj) {
+        batteryObj.removeEventListener('chargingchange', () => {});
+        batteryObj.removeEventListener('levelchange', () => {});
+      }
+    };
   }, []);
 
   return batteryInfo;
@@ -238,11 +260,11 @@ export const useDeviceInfo = () => {
     prefersDarkMode,
     prefersReducedMotion,
     batteryInfo,
-    userAgent: navigator.userAgent,
-    platform: navigator.platform,
-    language: navigator.language,
-    cookieEnabled: navigator.cookieEnabled,
-  };
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    platform: typeof navigator !== 'undefined' ? navigator.platform : '',
+    language: typeof navigator !== 'undefined' ? navigator.language : 'en',
+    cookieEnabled: typeof navigator !== 'undefined' ? navigator.cookieEnabled : false,
+  } as const;
 };
 
 // アダプティブローディング（低電力モードやネットワーク状態に応じた最適化）
@@ -252,12 +274,13 @@ export const useAdaptiveLoading = () => {
   const { isMobile } = useBreakpoint();
 
   // 低電力モードかどうかを判定
-  const isLowPowerMode = batteryInfo && batteryInfo.level < 0.2 && !batteryInfo.charging;
-  
+  const isLowPowerMode = !!batteryInfo && batteryInfo.level < 0.2 && !batteryInfo.charging;
+
   // データセーバーモード（実験的）
-  const isDataSaverMode = 'connection' in navigator && 
-    // @ts-ignore
-    navigator.connection?.saveData === true;
+  const isDataSaverMode =
+    typeof navigator !== 'undefined' &&
+    'connection' in navigator &&
+    (navigator as any).connection?.saveData === true;
 
   // 最適化レベルを決定
   const getOptimizationLevel = (): 'high' | 'medium' | 'low' => {
@@ -278,7 +301,7 @@ export const useAdaptiveLoading = () => {
     shouldReduceAnimations: isLowPowerMode || isDataSaverMode,
     shouldReduceImageQuality: isDataSaverMode || isLowPowerMode,
     shouldLazyLoad: isMobile || isDataSaverMode,
-  };
+  } as const;
 };
 
 export default {

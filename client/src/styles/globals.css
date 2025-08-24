@@ -1,9 +1,9 @@
+/* FlickMV UI修正スタイル */
+@import './ui-fixes.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* FlickMV UI修正スタイル */
-@import './ui-fixes.css';
 
 /* カスタムCSSクラス */
 @layer base {

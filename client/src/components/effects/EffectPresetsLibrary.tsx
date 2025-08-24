@@ -139,7 +139,7 @@ const EffectPresetsLibrary: React.FC<EffectPresetsLibraryProps> = ({
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">エフェクト プリセット</h3>
+              <h3 className="text-lg font-semibold text-white">エフェクトプリセット</h3>
               <p className="text-sm text-gray-400">
                 {filteredPresets.length} 個のプリセット
                 {selectedClip ? ` • ${selectedClip.id.slice(-4)} に適用` : ' • クリップを選択'}

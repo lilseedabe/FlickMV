@@ -231,9 +231,7 @@ const FrequencyAnalyzer: React.FC<FrequencyAnalyzerProps> = ({
     const analysis: AudioAnalysis = {
       frequencyBands,
       rms: Math.sqrt(dataArray.reduce((sum, val) => sum + val * val, 0) / dataArray.length) / 255,
-      peak: maxVal / 255,
-      spectralCentroid: 0, // 簡略化
-      zcr: 0 // 簡略化
+      peak: maxVal / 255
     };
 
     setCurrentAnalysis(analysis);
@@ -455,7 +453,7 @@ const FrequencyAnalyzer: React.FC<FrequencyAnalyzerProps> = ({
       {/* トリガー履歴 */}
       {triggerHistory.length > 0 && (
         <div className="p-4 border-t border-dark-700">
-          <h4 className="text-sm font-medium text白 mb-3 flex items-center space-x-2">
+          <h4 className="text-sm font-medium text-white mb-3 flex items-center space-x-2">
             <Activity className="w-4 h-4" />
             <span>最近のトリガー</span>
           </h4>
@@ -485,7 +483,7 @@ const FrequencyAnalyzer: React.FC<FrequencyAnalyzerProps> = ({
             </p>
             <p>
               感度を調整して、トリガーする閾値を変更できます。
-              {isAnalyzing ? '解析中です。' : '"開始"ボタンを押して解析を始めてください。'}
+              {isAnalyzing ? '解析中です。' : '「開始」ボタンを押して解析を始めてください。'}
             </p>
           </div>
         </div>

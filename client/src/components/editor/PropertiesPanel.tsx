@@ -604,7 +604,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
               <Section id="transitions" title="Transitions" icon={<ArrowRightLeft className="w-4 h-4" />}>
                 <div className="space-y-4">
-                  {/* 既存のトランジション */}
+                  {/* 既存�Eトランジション */}
                   {selectedClip.transitions && (
                     <div className="space-y-3">
                       {selectedClip.transitions.in && (
@@ -655,7 +655,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                           <button
                             key={type}
                             onClick={() => {
-                              // 既存のトランジションがない場合はアウトトランジションを追加
+                              // 既存�EトランジションがなぁE��合�Eアウトトランジションを追加
                               if (!selectedClip.transitions?.out) {
                                 addTransition('out', type as Transition['type']);
                               }
@@ -704,9 +704,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     })}
                     className="input"
                   >
-                    <option value="9:16">9:16 (1080×1920) - Vertical</option>
-                    <option value="1:1">1:1 (1080×1080) - Square</option>
-                    <option value="16:9">16:9 (1920×1080) - Horizontal</option>
+                    <option value="9:16">9:16 (1080ÁE920) - Vertical</option>
+                    <option value="1:1">1:1 (1080ÁE080) - Square</option>
+                    <option value="16:9">16:9 (1920ÁE080) - Horizontal</option>
                   </select>
                 </div>
                 

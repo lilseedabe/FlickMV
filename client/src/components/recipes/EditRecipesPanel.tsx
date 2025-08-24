@@ -90,7 +90,7 @@ const PRESET_RECIPES: EditRecipe[] = [
   },
   {
     id: 'slide_transition',
-    name: 'スライド遷移',
+    name: 'スライド転移',
     description: '小節の変わり目でスライド切り替え',
     icon: 'arrow-right',
     category: 'cutting',
@@ -134,7 +134,7 @@ const PRESET_RECIPES: EditRecipe[] = [
   {
     id: 'beat_glow',
     name: 'ビートグロー',
-    description: 'ビートで光の輪郭を追加',
+    description: 'ビートで光る輪郭を追加',
     icon: 'sun',
     category: 'effects',
     difficulty: 'intermediate',
@@ -227,7 +227,7 @@ const EditRecipesPanel: React.FC<EditRecipesPanelProps> = ({
     }
   };
 
-  // レシピプレビュー
+  // レシピのプレビュー
   const handlePreview = (recipe: EditRecipe) => {
     setPreviewingRecipe(previewingRecipe === recipe.id ? null : recipe.id);
     onRecipePreview(recipe);
@@ -524,7 +524,7 @@ const EditRecipesPanel: React.FC<EditRecipesPanelProps> = ({
           <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
           <div>
             <p className="mb-1">
-              Edit Recipesは楽曲のビートや小節に同期した自動編集を提供します。
+              Edit Recipesは楽曲のビートや小節に同期した自動編集機能を提供します。
             </p>
             <p>
               {selectedClip ? 'レシピを選択して選択中のクリップに適用してください。' : 'まずタイムラインでクリップを選択してください。'}

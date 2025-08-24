@@ -23,7 +23,7 @@ export interface TimelineScale {
 }
 
 /**
- * タイムラインスケール管理の共通フック
+ * タイムラインスケール管理用の共通フック
  * 複数のタイムラインコンポーネントで一貫したスケール計算を提供
  */
 export const useTimelineScale = (config: TimelineScaleConfig): TimelineScale => {
@@ -38,7 +38,7 @@ export const useTimelineScale = (config: TimelineScaleConfig): TimelineScale => 
     // ズーム倍率を適用してピクセル数を計算
     const rawPixelsPerSecond = basePixelsPerSecond * zoom;
     
-    // 最小/最大値でクランプ
+    // 最小・最大値でクランプ
     const pixelsPerSecond = Math.max(
       minPixelsPerSecond,
       Math.min(maxPixelsPerSecond, rawPixelsPerSecond)

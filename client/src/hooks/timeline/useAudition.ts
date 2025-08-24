@@ -23,9 +23,9 @@ export interface AuditionVersion {
 }
 
 export interface AuditionComparison {
-  /** 比較中のバージョンA */
+  /** 比較対象のバージョンA */
   versionA: AuditionVersion;
-  /** 比較中のバージョンB */
+  /** 比較対象のバージョンB */
   versionB: AuditionVersion;
   /** 比較開始時刻 */
   startTime: number;
@@ -51,7 +51,7 @@ export interface AuditionState {
   activeVersion: AuditionVersion | null;
   /** 保存されたバージョン一覧 */
   versions: AuditionVersion[];
-  /** 比較中の状態 */
+  /** 比較の状態 */
   comparison: AuditionComparison | null;
   /** オーディションモードが有効か */
   isAuditionMode: boolean;
@@ -96,6 +96,17 @@ export const useAudition = (
 
   const autoSaveTimeoutRef = useRef<number | null>(null);
   const lastSavedStateRef = useRef<string>(JSON.stringify(initialTimeline));
+
+  // ランダム色生成
+  const getRandomColor = (): string => {
+    const colors = [
+      '#ef4444', '#f97316', '#f59e0b', '#eab308',
+      '#84cc16', '#22c55e', '#10b981', '#14b8a6',
+      '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
+      '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
 
   // バージョン作成
   const createVersion = useCallback((
@@ -238,7 +249,7 @@ export const useAudition = (
     return version.timeline;
   }, [auditionState.versions, auditionState.activeVersion, debug]);
 
-  // A/B比較の開始
+  // A/B比較開始
   const startComparison = useCallback((
     versionAId: string,
     versionBId: string,
@@ -275,7 +286,7 @@ export const useAudition = (
     return true;
   }, [auditionState.versions, debug]);
 
-  // 比較の終了
+  // 比較終了
   const endComparison = useCallback(() => {
     setAuditionState(prev => ({
       ...prev,
@@ -334,7 +345,7 @@ export const useAudition = (
     }, autoSaveInterval);
   }, [enableAutoSave, autoSaveInterval, saveCurrentAsVersion, debug]);
 
-  // バージョン間の差分を計算
+  // バージョン間の差分計算
   const calculateVersionDiff = useCallback((versionAId: string, versionBId: string) => {
     const versionA = auditionState.versions.find(v => v.id === versionAId);
     const versionB = auditionState.versions.find(v => v.id === versionBId);
@@ -375,17 +386,6 @@ export const useAudition = (
     }
     return auditionState.activeVersion?.timeline || initialTimeline;
   }, [auditionState.previewVersion, auditionState.activeVersion, initialTimeline]);
-
-  // ランダム色生成
-  const getRandomColor = (): string => {
-    const colors = [
-      '#ef4444', '#f97316', '#f59e0b', '#eab308',
-      '#84cc16', '#22c55e', '#10b981', '#14b8a6',
-      '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
-      '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
 
   // クリーンアップ
   const cleanup = useCallback(() => {

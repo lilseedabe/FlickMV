@@ -136,7 +136,7 @@ const Navbar: React.FC = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="p-2 hover:bg-dark-600 rounded-md transition-colors"
-              title="やり直し"
+              title="やり直す"
             >
               <Redo2 className="w-4 h-4" />
             </motion.button>

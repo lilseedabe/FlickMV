@@ -178,7 +178,7 @@ const MediaLibraryFixed: React.FC<MediaLibraryProps> = ({
     }
   };
 
-  // 音楽再生機能（改良版）
+  // 音楽再生機能：改良版
   const playAudio = useCallback((file: MediaFile) => {
     if (!file.url || file.type !== 'audio') {
       console.warn('再生不可能なファイル:', file);
@@ -236,7 +236,7 @@ const MediaLibraryFixed: React.FC<MediaLibraryProps> = ({
         if (audioSrc.startsWith('blob:')) {
           URL.revokeObjectURL(audioSrc);
         }
-        console.log(`✅ 音楽再生終了: ${file.name}`);
+        console.log(`✓ 音楽再生終了: ${file.name}`);
       });
       
       audio.addEventListener('error', (e) => {

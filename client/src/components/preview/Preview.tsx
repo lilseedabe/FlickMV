@@ -83,17 +83,17 @@ const Preview: React.FC<PreviewProps> = ({
           
           img.onerror = (error) => {
             clearTimeout(timeoutId);
-            console.error('❌ 画像読み込み失敗:', mediaFile.name, error);
+            console.error('❌ 画像読み込み失敗', mediaFile.name, error);
             reject(error);
           };
           
-          // originalFileがある場合は新しいBlob URLを作成
+          // originalFileがある場合、新しいBlob URLを作成
           if (mediaFile.originalFile && mediaFile.originalFile instanceof File) {
             try {
               const blobUrl = URL.createObjectURL(mediaFile.originalFile);
               img.src = blobUrl;
               
-              // 読み込み完了後にBlob URLをクリーンアップ
+              // 読み込み完了時にBlob URLをクリーンアップ
               img.onload = () => {
                 clearTimeout(timeoutId);
                 URL.revokeObjectURL(blobUrl);
@@ -105,11 +105,11 @@ const Preview: React.FC<PreviewProps> = ({
               img.onerror = (error) => {
                 clearTimeout(timeoutId);
                 URL.revokeObjectURL(blobUrl);
-                console.error('❌ 画像読み込み失敗（originalFile）:', mediaFile.name, error);
+                console.error('❌ 画像読み込み失敗（originalFile）', mediaFile.name, error);
                 reject(error);
               };
             } catch (blobError) {
-              console.error('❌ Blob URL作成失敗:', mediaFile.name, blobError);
+              console.error('❌ Blob URL作成失敗', mediaFile.name, blobError);
               // フォールバックで元のURLを使用
               img.src = mediaFile.url;
             }
@@ -138,17 +138,17 @@ const Preview: React.FC<PreviewProps> = ({
           
           video.onerror = (error) => {
             clearTimeout(timeoutId);
-            console.error('❌ 動画読み込み失敗:', mediaFile.name, error);
+            console.error('❌ 動画読み込み失敗', mediaFile.name, error);
             reject(error);
           };
           
-          // originalFileがある場合は新しいBlob URLを作成
+          // originalFileがある場合、新しいBlob URLを作成
           if (mediaFile.originalFile && mediaFile.originalFile instanceof File) {
             try {
               const blobUrl = URL.createObjectURL(mediaFile.originalFile);
               video.src = blobUrl;
               
-              // 読み込み完了後にBlob URLをクリーンアップ
+              // 読み込み完了時にBlob URLをクリーンアップ
               video.onloadedmetadata = () => {
                 clearTimeout(timeoutId);
                 setLoadedMedia(prev => new Map(prev).set(mediaFile.id, video));
@@ -159,11 +159,11 @@ const Preview: React.FC<PreviewProps> = ({
               video.onerror = (error) => {
                 clearTimeout(timeoutId);
                 URL.revokeObjectURL(blobUrl);
-                console.error('❌ 動画読み込み失敗（originalFile）:', mediaFile.name, error);
+                console.error('❌ 動画読み込み失敗（originalFile）', mediaFile.name, error);
                 reject(error);
               };
             } catch (blobError) {
-              console.error('❌ Blob URL作成失敗:', mediaFile.name, blobError);
+              console.error('❌ Blob URL作成失敗', mediaFile.name, blobError);
               // フォールバックで元のURLを使用
               video.src = mediaFile.url;
             }
@@ -325,7 +325,7 @@ const Preview: React.FC<PreviewProps> = ({
         ctx.fillStyle = colors[colorIndex];
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         
-        // 読み込みテキスト
+        // 読み込みステータス
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
@@ -402,7 +402,7 @@ const Preview: React.FC<PreviewProps> = ({
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         
-        // 読み込みテキスト
+        // 読み込みステータス
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';

@@ -1,7 +1,7 @@
 import type { AudioTrackEnhanced, BPMAnalysis } from '@/types';
 
 /**
- * 音声ファイルの解析とBPM検出を行うユーティリティクラス
+ * 音声ファイルの解析と BPM 検出を行うユーティリティクラス
  */
 export class AudioAnalyzer {
   private audioContext: AudioContext;
@@ -11,20 +11,20 @@ export class AudioAnalyzer {
   }
 
   /**
-   * 音声ファイルを読み込んでAudioBufferに変換
+   * 音声ファイルを読み込んで AudioBuffer に変換
    */
   async loadAudioFile(file: File | string): Promise<AudioBuffer> {
     let arrayBuffer: ArrayBuffer;
     
     if (typeof file === 'string') {
-      // URLから読み込み
+      // URL から読み込み
       const response = await fetch(file);
       if (!response.ok) {
         throw new Error(`Failed to fetch audio file: ${response.statusText}`);
       }
       arrayBuffer = await response.arrayBuffer();
     } else {
-      // Fileオブジェクトから読み込み
+      // File オブジェクトから読み込み
       arrayBuffer = await file.arrayBuffer();
     }
     
@@ -36,7 +36,7 @@ export class AudioAnalyzer {
   }
 
   /**
-   * BPMを検出する
+   * BPM を検出する
    */
   async detectBPM(audioBuffer: AudioBuffer): Promise<BPMAnalysis> {
     const channelData = audioBuffer.getChannelData(0);
@@ -48,13 +48,13 @@ export class AudioAnalyzer {
     // エネルギーベースのオンセット検出
     const onsets = this.detectOnsets(filteredData, sampleRate);
     
-    // BPMを計算
+    // BPM を計算
     const bpm = this.calculateBPM(onsets);
     
     // ビートタイムを生成
     const beatTimes = this.generateBeatTimes(bpm, audioBuffer.duration);
     
-    // 小節を計算（4/4拍子と仮定）
+    // 小節を計算（4/4 拍子を仮定）
     const bars = this.generateBars(beatTimes, 4);
     
     return {
@@ -102,7 +102,7 @@ export class AudioAnalyzer {
   }
 
   /**
-   * AudioTrackオブジェクトを生成
+   * AudioTrack オブジェクトを生成
    */
   async createAudioTrack(
     file: File, 
@@ -112,7 +112,7 @@ export class AudioAnalyzer {
     const audioBuffer = await this.loadAudioFile(file);
     const bpmAnalysis = await this.detectBPM(audioBuffer);
     
-    // ファイルをBlobURLに変換
+    // ファイルを Blob URL に変換
     const url = URL.createObjectURL(file);
     
     return {
@@ -127,7 +127,7 @@ export class AudioAnalyzer {
       beats: bpmAnalysis.beatTimes,
       bars: bpmAnalysis.bars,
       bpmAnalysis,
-      waveformData: this.generateWaveformData(audioBuffer, 1000).peaks, // Float32Array型に変更
+      waveformData: this.generateWaveformData(audioBuffer, 1000).peaks, // Float32Array 型
       analyzedAt: new Date().toISOString()
     };
   }
@@ -170,7 +170,7 @@ export class AudioAnalyzer {
       
       // エネルギーの急激な増加を検出
       const energyDiff = energy - prevEnergy;
-      const threshold = prevEnergy * 0.3; // 30%の増加をオンセットとする
+      const threshold = prevEnergy * 0.3; // 30% の増加をオンセットとする
       
       if (energyDiff > threshold && energy > 0.01) {
         const time = i / sampleRate;
@@ -184,11 +184,12 @@ export class AudioAnalyzer {
   }
 
   /**
-   * BPMを計算
+   * BPM を計算
    */
   private calculateBPM(onsets: number[]): number {
     if (onsets.length < 4) {
-      return 120; // デフォルトBPM
+      // デフォルト BPM
+      return 120;
     }
     
     // オンセット間の間隔を計算
@@ -201,7 +202,7 @@ export class AudioAnalyzer {
     intervals.sort((a, b) => a - b);
     const medianInterval = intervals[Math.floor(intervals.length / 2)];
     
-    // BPMに変換
+    // BPM に変換
     const bpm = Math.round(60 / medianInterval);
     
     // 現実的な範囲に制限
@@ -259,7 +260,7 @@ export class AudioAnalyzer {
 }
 
 /**
- * 音声ファイルからAudioTrackを作成するヘルパー関数
+ * 音声ファイルから AudioTrack を作成するヘルパー関数
  */
 export async function createAudioTrackFromFile(
   file: File,
@@ -275,7 +276,7 @@ export async function createAudioTrackFromFile(
 }
 
 /**
- * 音声ファイルのBPMのみを検出するヘルパー関数
+ * 音声ファイルの BPM のみを検出するヘルパー関数
  */
 export async function detectAudioBPM(file: File | string): Promise<BPMAnalysis> {
   const analyzer = new AudioAnalyzer();

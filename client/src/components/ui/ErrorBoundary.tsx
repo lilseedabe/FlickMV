@@ -104,12 +104,10 @@ class ErrorBoundary extends Component<Props, State> {
               transition={{ delay: 0.3 }}
               className="text-gray-400 mb-6"
             >
-              申し訳ございません。予期しないエラーが発生しました。
-              ページを再読み込みするか、ホームに戻ってください。
-            </motion.p>
+              申し訳ござぁE��せん。予期しなぁE��ラーが発生しました、E              ペ�Eジを�E読み込みするか、�Eームに戻ってください、E            </motion.p>
 
             {/* Error details (only in development) */}
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.MODE === 'development' && this.state.error && (
               <motion.details
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -117,7 +115,7 @@ class ErrorBoundary extends Component<Props, State> {
                 className="mb-6 text-left bg-dark-800 rounded-lg p-4 border border-red-500/30"
               >
                 <summary className="text-red-400 font-medium cursor-pointer mb-2">
-                  エラー詳細 (開発モード)
+                  エラー詳細 (開発モーチE
                 </summary>
                 <div className="text-xs text-gray-300 space-y-2">
                   <div>
@@ -165,7 +163,7 @@ class ErrorBoundary extends Component<Props, State> {
                 className="flex-1 bg-dark-700 hover:bg-dark-600 text-white py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
               >
                 <Home className="w-4 h-4" />
-                <span>ホーム</span>
+                <span>ホ�Eム</span>
               </button>
             </motion.div>
 
@@ -176,15 +174,13 @@ class ErrorBoundary extends Component<Props, State> {
               className="mt-6 text-sm text-gray-500"
             >
               <p>
-                問題が解決しない場合は、
-                <a 
+                問題が解決しなぁE��合�E、E                <a 
                   href="/support" 
                   className="text-purple-400 hover:text-purple-300 underline ml-1"
                 >
-                  サポートチーム
+                  サポ�Eトチーム
                 </a>
-                にお問い合わせください。
-              </p>
+                にお問ぁE��わせください、E              </p>
             </motion.div>
           </motion.div>
         </div>

@@ -81,7 +81,7 @@ const tutorials = [
   {
     id: 'audio-sync',
     title: '音楽に合わせた編集',
-    description: 'BPMを使って音楽に合わせた魅力的な映像を作る方法',
+    description: 'BPMを使って音楽に合わせたスムーズな映像を作る方法',
     duration: '8分',
     difficulty: 'intermediate',
     icon: Music,
@@ -227,7 +227,7 @@ const Dashboard: React.FC = () => {
                 </h2>
                 <p className="text-gray-300 mb-6">
                   AIの力でプロレベルのミュージックビデオを作成できます。
-                  初心者の方でも簡単に始められるよう、ガイドをご用意しました。
+                  初心者の方でも簡単に始められるようにガイドをご用意しました。
                 </p>
                 <div className="space-y-3 mb-6">
                   <div className="flex items-center text-left">
@@ -282,7 +282,7 @@ const Dashboard: React.FC = () => {
                 {user?.name ? `おかえりなさい、${user.name}さん！` : 'おかえりなさい！'} 👋
               </h1>
               <p className="text-dark-400 text-lg">
-                AIの力で素晴らしいミュージックビデオを作成しましょう
+                AIの力で素晴らしいミュージックビデオを作成しましょう。
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -482,7 +482,7 @@ const Dashboard: React.FC = () => {
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-2">プロジェクトが見つかりません</h3>
                   <p className="text-dark-400 mb-6">
-                    {searchTerm ? '検索条件を調整してみてください' : '最初のプロジェクトを作成して始めましょう'}
+                    {searchTerm ? '検索条件を調整してみてください' : '最初のプロジェクトを作成して始めましょう！'}
                   </p>
                   <Link to="/editor" className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-3 px-6 rounded-lg font-medium transition-all inline-flex items-center space-x-2">
                     <Plus className="w-5 h-5" />

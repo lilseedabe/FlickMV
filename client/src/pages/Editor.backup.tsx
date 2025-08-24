@@ -112,7 +112,7 @@ class PreviewWindowManager {
         return newWindow;
       }
     } catch (error) {
-      console.error('プレビューウィンドウの作成に失敗:', error);
+      console.error('プレビューウィンドウの作成に失敗', error);
     }
     
     return null;
@@ -178,7 +178,7 @@ class PreviewWindowManager {
         </div>
         <div class="resolution-indicator">${config.resolution}</div>
         <div class="preview-controls">
-          <button class="control-btn" onclick="window.close()">✕ 閉じる</button>
+          <button class="control-btn" onclick="window.close()">× 閉じる</button>
           <button class="control-btn" onclick="toggleFullscreen()">⛶ フルスクリーン</button>
           <button class="control-btn" onclick="captureFrame()">📷 キャプチャ</button>
         </div>
@@ -364,7 +364,7 @@ const Editor: React.FC = () => {
   const tutorialSteps = [
     {
       title: "新しいワークフロー",
-      description: "プレビューは別ウィンドウで確認し、メインでは快適なタイムライン編集に集中できます",
+      description: "プレビューは別ウィンドウで確認し、メインでは快適なタイムライン編集作業ができます",
       target: "timeline-area"
     },
     {
@@ -515,7 +515,7 @@ const Editor: React.FC = () => {
 
   const handleExport = () => {
     if (user.exportStats.remaining <= 0) {
-      alert('エクスポート制限に達しました。プランをアップグレードしてください。');
+      alert('エクスポート制限に達しました。プランをアップグレードしてください');
       return;
     }
     setShowExportModal(true);

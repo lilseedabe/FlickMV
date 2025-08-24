@@ -2,7 +2,7 @@ import { BPMAnalysis, AudioAnalysis, FrequencyBand } from '../../types';
 
 /**
  * 音声解析の補助ユーティリティ関数集
- * 初心者にも理解しやすいよう詳細にコメント
+ * 初心者にも理解しやすいよう詳細なコメント付き
  */
 
 /**
@@ -32,7 +32,7 @@ export function calculateBarInterval(bpm: number, timeSignature: number = 4): nu
  */
 export function getClosestBeatTime(time: number, beatTimes: number[]): number {
   if (beatTimes.length === 0) return time;
-  
+
   return beatTimes.reduce((closest, current) => {
     return Math.abs(current - time) < Math.abs(closest - time) ? current : closest;
   });
@@ -46,7 +46,7 @@ export function getClosestBeatTime(time: number, beatTimes: number[]): number {
  */
 export function getClosestBarTime(time: number, barTimes: number[]): number {
   if (barTimes.length === 0) return time;
-  
+
   return barTimes.reduce((closest, current) => {
     return Math.abs(current - time) < Math.abs(closest - time) ? current : closest;
   });
@@ -59,7 +59,7 @@ export function getClosestBarTime(time: number, barTimes: number[]): number {
  */
 export function generateBPMRecommendations(analysis: BPMAnalysis): string[] {
   const recommendations: string[] = [];
-  
+
   if (analysis.confidence >= 0.9) {
     recommendations.push('BPM検出の精度が非常に高いです。ビート同期機能を積極的に活用できます。');
   } else if (analysis.confidence >= 0.7) {
@@ -69,19 +69,19 @@ export function generateBPMRecommendations(analysis: BPMAnalysis): string[] {
   } else {
     recommendations.push('BPM検出の精度が低いです。手動でのビート設定をお勧めします。');
   }
-  
+
   // BPMに基づく推奨事項
   if (analysis.bpm < 80) {
     recommendations.push('スローテンポなので、ゆったりとしたトランジションやエフェクトが効果的です。');
   } else if (analysis.bpm > 140) {
     recommendations.push('ハイテンポなので、クイックカットや激しいエフェクトが映えます。');
   }
-  
+
   // ビート数に基づく推奨事項
   if (analysis.beatTimes.length > 100) {
     recommendations.push('十分なビート数が検出されました。細かなビート同期編集が可能です。');
   }
-  
+
   return recommendations;
 }
 
@@ -92,7 +92,7 @@ export function generateBPMRecommendations(analysis: BPMAnalysis): string[] {
  */
 export function suggestEffectsFromFrequency(bands: FrequencyBand[]): string[] {
   const suggestions: string[] = [];
-  
+
   bands.forEach(band => {
     if (band.triggered) {
       switch (band.name.toLowerCase()) {
@@ -116,7 +116,7 @@ export function suggestEffectsFromFrequency(bands: FrequencyBand[]): string[] {
       }
     }
   });
-  
+
   return Array.from(new Set(suggestions)); // 重複を除去
 }
 
@@ -154,26 +154,26 @@ export function analyzeBeatRegularity(beatTimes: number[]): {
       regularity: 'very_irregular'
     };
   }
-  
+
   // 間隔の計算
   const intervals: number[] = [];
   for (let i = 1; i < beatTimes.length; i++) {
     intervals.push(beatTimes[i] - beatTimes[i - 1]);
   }
-  
+
   // 平均間隔
   const averageInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
-  
+
   // 標準偏差
   const variance = intervals.reduce((sum, interval) => {
     return sum + Math.pow(interval - averageInterval, 2);
   }, 0) / intervals.length;
   const standardDeviation = Math.sqrt(variance);
-  
+
   // 規則性の判定
   const coefficientOfVariation = standardDeviation / averageInterval;
   let regularity: 'very_regular' | 'regular' | 'irregular' | 'very_irregular';
-  
+
   if (coefficientOfVariation < 0.05) {
     regularity = 'very_regular';
   } else if (coefficientOfVariation < 0.1) {
@@ -183,7 +183,7 @@ export function analyzeBeatRegularity(beatTimes: number[]): {
   } else {
     regularity = 'very_irregular';
   }
-  
+
   return {
     averageInterval,
     standardDeviation,
@@ -192,10 +192,10 @@ export function analyzeBeatRegularity(beatTimes: number[]): {
 }
 
 /**
- * オーディオファイルの再生時間からBPMを概算
+ * オーディオファイルの再生時間から BPM を概算
  * @param duration - 音声ファイルの長さ（秒）
  * @param estimatedBeats - 推定されるビート数
- * @returns 概算BPM
+ * @returns 概算 BPM
  */
 export function estimateBPMFromDuration(duration: number, estimatedBeats: number): number {
   const beatsPerSecond = estimatedBeats / duration;
@@ -203,11 +203,11 @@ export function estimateBPMFromDuration(duration: number, estimatedBeats: number
 }
 
 /**
- * BPMの変更に合わせてエフェクトパラメータを調整
- * @param originalBPM - 元のBPM
- * @param newBPM - 新しいBPM
+ * BPM の変更に合わせてエフェクトパラメータを調整
+ * @param originalBPM - 元の BPM
+ * @param newBPM - 新しい BPM
  * @param effectDuration - エフェクトの継続時間（秒）
- * @returns 調整されたエフェクト継続時間
+ * @returns 調整後のエフェクト継続時間
  */
 export function adjustEffectForBPM(originalBPM: number, newBPM: number, effectDuration: number): number {
   const ratio = originalBPM / newBPM;
@@ -241,14 +241,14 @@ export function extractMusicFeatures(analysis: AudioAnalysis): {
   const bassEnergy = analysis.frequencyBands
     .filter(band => ['BASS', 'SUB_BASS', 'KICK'].includes(band.name))
     .reduce((sum, band) => sum + band.energy, 0) / 3;
-  
+
   const trebleEnergy = analysis.frequencyBands
     .filter(band => ['HIGHS', 'BRILLIANCE', 'PRESENCE'].includes(band.name))
     .reduce((sum, band) => sum + band.energy, 0) / 3;
-  
+
   const dynamicRange = analysis.peak - analysis.rms;
   let dynamicRangeCategory: 'low' | 'medium' | 'high';
-  
+
   if (dynamicRange < 0.3) {
     dynamicRangeCategory = 'low';
   } else if (dynamicRange < 0.6) {
@@ -256,12 +256,12 @@ export function extractMusicFeatures(analysis: AudioAnalysis): {
   } else {
     dynamicRangeCategory = 'high';
   }
-  
+
   return {
     bassHeavy: bassEnergy > 0.6,
     treblySound: trebleEnergy > 0.6,
     dynamicRange: dynamicRangeCategory,
-    brightness: analysis.spectralCentroid
+    brightness: analysis.spectralCentroid ?? trebleEnergy
   };
 }
 
@@ -276,13 +276,13 @@ export function debugBPMAnalysis(analysis: BPMAnalysis): void {
   console.log(`ビート数: ${analysis.beatTimes.length}`);
   console.log(`小節数: ${analysis.bars.length}`);
   console.log(`拍子: ${analysis.timeSignature.numerator}/${analysis.timeSignature.denominator}`);
-  
+
   const regularity = analyzeBeatRegularity(analysis.beatTimes);
   console.log(`ビートの規則性: ${regularity.regularity}`);
   console.log(`平均ビート間隔: ${regularity.averageInterval.toFixed(3)}秒`);
-  
+
   const genre = guessGenreFromBPM(analysis.bpm);
   console.log(`推測ジャンル: ${genre}`);
-  
+
   console.groupEnd();
 }

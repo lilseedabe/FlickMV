@@ -1,6 +1,12 @@
 // API Configuration
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-export const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:5000';
+export const API_BASE_URL =
+  (import.meta as any).env?.VITE_API_URL ??
+  (globalThis as any).process?.env?.REACT_APP_API_URL ??
+  'http://localhost:5000/api';
+export const WS_URL =
+  (import.meta as any).env?.VITE_WS_URL ??
+  (globalThis as any).process?.env?.REACT_APP_WS_URL ??
+  'ws://localhost:5000';
 
 // File Upload Limits
 export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB

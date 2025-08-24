@@ -385,7 +385,7 @@ const RightPanelFixed: React.FC<RightPanelProps> = ({
                       placeholder="秒数を入力"
                     />
                     <div className="text-xs text-gray-500 mt-1">
-                      60～600秒の間で設定できます
+                      60〜600秒の間で設定できます
                     </div>
                   </div>
                 </div>
@@ -536,7 +536,7 @@ const RightPanelFixed: React.FC<RightPanelProps> = ({
                             <p>• 40%未満: 低精度（手動調整推奨）</p>
                           </div>
                           <p className="mt-1 text-amber-400 text-xs">
-                            信頼度が低い場合は、楽曲の構造を手動で確認してください
+                            信頼度が低い場合、楽曲の構造を手動で確認してください
                           </p>
                         </div>
                       </div>

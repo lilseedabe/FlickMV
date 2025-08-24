@@ -10,11 +10,11 @@ import {
   Info,
   Volume2,
   BarChart3,
-  Zap
+  Zap,
 } from 'lucide-react';
 
 import { BPMDetectorProps, BPMAnalysis } from '../../types';
-import { BPMDetector, loadAudioFile } from '../../utils/audio/bpmDetector';
+import { BPMDetector } from '../../utils/audio/bpmDetector';
 
 /**
  * BPM検出コンポーネント
@@ -25,7 +25,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
   onBPMDetected,
   onAnalysisStart,
   onAnalysisComplete,
-  onError
+  onError,
 }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -36,7 +36,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
 
   /**
-   * BPM検出の実行 - 軽量版アルゴリズム使用（高速処理）
+   * BPM検出の実行（軽量版アルゴリズムを使用し高速処理）
    */
   const detectBPM = useCallback(async () => {
     if (!audioFile) return;
@@ -49,33 +49,33 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
 
       console.log('🎵 軽量版BPM検出を開始します（高速処理）');
 
-      // 進行状況の更新（現実的なタイミング）
+      // 進行状況を更新（UI更新のためのウェイト）
       setProgress(15);
-      await new Promise(resolve => setTimeout(resolve, 100)); // UI更新用
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // 音声ファイルをAudioBufferに変換（改良版）
+      // AudioBuffer へ変換
       let arrayBuffer: ArrayBuffer;
-      
+
       if (audioFile.originalFile) {
-        // 原始Fileオブジェクトがある場合は直接使用（最も信頼性が高い）
-        console.log('📁 原始Fileオブジェクトを使用してBPM検出');
+        // 原始 File オブジェクトがある場合は直接使用（最も信頼性が高い）
+        console.log('📁 原始 File オブジェクトを使用してBPM検出');
         arrayBuffer = await audioFile.originalFile.arrayBuffer();
       } else if (audioFile.url.startsWith('blob:')) {
-        // Blob URLの場合はフォールバック
-        console.log('🌐 Blob URLを使用してBPM検出');
+        // Blob URL のフォールバック
+        console.log('🌐 Blob URL を使用してBPM検出');
         try {
           const response = await fetch(audioFile.url);
           if (!response.ok) {
-            throw new Error(`Blob URLの読み込みに失敗: ${response.status}`);
+            throw new Error(`Blob URL の読み込みに失敗: ${response.status}`);
           }
           arrayBuffer = await response.arrayBuffer();
         } catch (fetchError) {
-          console.error('Blob URLの取得に失敗:', fetchError);
+          console.error('Blob URL の取得に失敗', fetchError);
           throw new Error('音声ファイルの読み込みに失敗しました。ファイルを再アップロードしてください。');
         }
       } else {
-        // 通常のURLの場合
-        console.log('🌐 通常のURLを使用してBPM検出');
+        // 通常の URL
+        console.log('🌐 通常の URL を使用してBPM検出');
         try {
           const response = await fetch(audioFile.url);
           if (!response.ok) {
@@ -83,81 +83,79 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
           }
           arrayBuffer = await response.arrayBuffer();
         } catch (fetchError) {
-          console.error('ファイルの取得に失敗:', fetchError);
+          console.error('ファイルの取得に失敗', fetchError);
           throw new Error('音声ファイルの読み込みに失敗しました。ネットワーク接続を確認してください。');
         }
       }
-      
+
       setProgress(35);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const buffer = await audioContext.decodeAudioData(arrayBuffer);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const buffer = await ctx.decodeAudioData(arrayBuffer);
       setAudioBuffer(buffer);
       setProgress(50);
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // 軽量版BPM検出器の作成と実行
+      // 軽量版 BPM 検出器の作成と実行
       console.log('🚀 高速アルゴリズムで解析中...');
       const detector = new BPMDetector();
       setProgress(65);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const analysis = await detector.detectBPM(buffer);
       setProgress(90);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // 結果の保存と通知
       setResult(analysis);
       onBPMDetected(analysis);
       setProgress(100);
 
-      console.log('✅ 軽量版BPM検出完了:', {
+      console.log('✅ 軽量版BPM検出完了', {
         bpm: analysis.bpm,
         confidence: Math.round(analysis.confidence * 100) + '%',
         beats: analysis.beatTimes.length,
         bars: analysis.bars.length,
-        processingTime: 'Fast'
+        processingTime: 'Fast',
       });
 
-      // クリーンアップ
-      detector.dispose();
+      // クリーンアップ（特別な破棄は不要）
       onAnalysisComplete?.();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'BPM検出中にエラーが発生しました';
       setError(errorMessage);
       onError?.(errorMessage);
-      console.error('❌ BPM検出エラー:', err);
+      console.error('❗ BPM検出エラー:', err);
     } finally {
       setIsAnalyzing(false);
     }
   }, [audioFile, onBPMDetected, onAnalysisStart, onAnalysisComplete, onError]);
 
-  // 音声プレビュー再生 - 改良版
+  // 音声プレビュー再生
   const togglePlayback = useCallback(async () => {
     if (!audioBuffer && !audioFile.originalFile) return;
 
     try {
       if (isPlaying) {
         // 停止
-        audioContext?.suspend();
+        await audioContext?.suspend();
         setIsPlaying(false);
       } else {
-        // 再生（原始Fileオブジェクトを使用）
+        // 再生（原始 File オブジェクトがあれば使用）
         const ctx = new AudioContext();
-        
+
         let currentAudioBuffer = audioBuffer;
         if (!currentAudioBuffer && audioFile.originalFile) {
-          // AudioBufferがない場合は新しく作成
-          console.log('📁 再生用にAudioBufferを作成');
-          const arrayBuffer = await audioFile.originalFile.arrayBuffer();
-          currentAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+          console.log('📁 再生用に AudioBuffer を作成');
+          const arr = await audioFile.originalFile.arrayBuffer();
+          currentAudioBuffer = await ctx.decodeAudioData(arr);
         }
-        
+
         if (!currentAudioBuffer) {
           throw new Error('音声バッファの作成に失敗しました');
         }
-        
+
         const source = ctx.createBufferSource();
         source.buffer = currentAudioBuffer;
         source.connect(ctx.destination);
@@ -191,7 +189,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
     if (isAnalyzing) return '軽量版アルゴリズムでBPMを高速解析中です。少々お待ちください...';
     if (result) {
       const { message } = getConfidenceMessage(result.confidence);
-      return `BPM検出完了！${message} タイムラインでビートマーカーを確認できます。`;
+      return `BPM検出完了。${message} タイムラインでビートマーカーを確認できます。`;
     }
     if (error) return 'エラーが発生しました。音声ファイルを確認してもう一度お試しください。';
     return 'このボタンを押すと、楽曲のテンポ（BPM）を高速アルゴリズムで検出します。';
@@ -218,7 +216,11 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
             <div>
               <p className="text-sm font-medium text-white">{audioFile.name}</p>
               <p className="text-xs text-gray-400">
-                {audioFile.duration ? `${Math.floor(audioFile.duration / 60)}:${(audioFile.duration % 60).toFixed(0).padStart(2, '0')}` : '不明'}
+                {audioFile.duration
+                  ? `${Math.floor(audioFile.duration / 60)}:${(audioFile.duration % 60)
+                      .toFixed(0)
+                      .padStart(2, '0')}`
+                  : '不明'}
                 {audioFile.size && ` • ${(audioFile.size / (1024 * 1024)).toFixed(1)}MB`}
               </p>
             </div>
@@ -257,7 +259,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
         ) : result ? (
           <>
             <CheckCircle className="w-4 h-4" />
-            <span>再検出</span>
+            <span>再解析</span>
           </>
         ) : (
           <>
@@ -313,7 +315,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
                 <div className="text-xs text-gray-400">信頼度</div>
               </div>
             </div>
-            
+
             {/* 信頼度メッセージ */}
             <div className={`text-center text-sm ${getConfidenceMessage(result.confidence).color} mb-2`}>
               {getConfidenceMessage(result.confidence).message}
@@ -323,7 +325,9 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
               <div className="flex items-center justify-between text-xs text-gray-300">
                 <span>ビート数: {result.beatTimes.length}</span>
                 <span>小節数: {result.bars.length}</span>
-                <span>拍子: {result.timeSignature.numerator}/{result.timeSignature.denominator}</span>
+                <span>
+                  拍子 {result.timeSignature.numerator}/{result.timeSignature.denominator}
+                </span>
               </div>
             </div>
           </motion.div>
@@ -374,7 +378,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
                 <p>• ブラウザ環境での高速処理に特化</p>
               </div>
             </motion.div>
-            
+
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -389,7 +393,7 @@ const BPMDetectorComponent: React.FC<BPMDetectorProps> = ({
                 <p>• タイムラインでビートマーカーを確認できます</p>
                 <p>• ビートスナップ機能でクリップを正確に配置</p>
                 <p>• BPMに合わせたプリセットを使用可能</p>
-                <p>• 信頼度が低い場合は手動で調整を推奨</p>
+                <p>• 信頼度が低い場合、手動で調整を推奨</p>
               </div>
             </motion.div>
           </>

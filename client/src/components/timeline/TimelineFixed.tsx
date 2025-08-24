@@ -25,10 +25,8 @@ import type { Timeline as TimelineType, TimelineClip, AudioTrack, Transition } f
 import WaveformDisplay from '../waveform/WaveformDisplay';
 
 // 新しい共通フックをインポート
-import {
-  useTimelineScale,
-  useTimelineDrag
-} from '../../hooks/timeline';
+import useTimelineScale from '../../hooks/timeline/useTimelineScale';
+import useTimelineDrag from '../../hooks/timeline/useTimelineDrag';
 
 interface TimelineProps {
   timeline: TimelineType;
@@ -63,7 +61,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
   const updateTimeoutRef = useRef<number | null>(null);
 
   // ========== 共通フック使用 ==========
-  
+
   // タイムラインスケール管理
   const { pixelsPerSecond, timeToPixel, pixelToTime } = useTimelineScale({
     zoom,
@@ -158,13 +156,13 @@ const TimelineFixed: React.FC<TimelineProps> = ({
 
     const splitPosition = playheadPosition - selectedClip.startTime;
     const newClipId = `${selectedClip.id}_split_${Date.now()}`;
-    
+
     const leftClip: TimelineClip = {
       ...selectedClip,
       duration: splitPosition,
       trimEnd: selectedClip.trimStart + splitPosition
     };
-    
+
     const rightClip: TimelineClip = {
       ...selectedClip,
       id: newClipId,
@@ -173,15 +171,15 @@ const TimelineFixed: React.FC<TimelineProps> = ({
       trimStart: selectedClip.trimStart + splitPosition
     };
 
-    const updatedClips = timeline.clips.map(clip => 
+    const updatedClips = timeline.clips.map(clip =>
       clip.id === selectedClipId ? leftClip : clip
     ).concat(rightClip);
-    
+
     const updatedTimeline = {
       ...timeline,
       clips: updatedClips
     };
-    
+
     onTimelineUpdate(updatedTimeline);
     console.log(`✂️ Clip split: ${selectedClip.id} → ${leftClip.id} + ${rightClip.id}`);
   }, [selectedClipId, timeline, playheadPosition, onTimelineUpdate]);
@@ -221,7 +219,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
       ...timeline,
       clips: [...timeline.clips, newClip]
     };
-    
+
     onTimelineUpdate(updatedTimeline);
     setSelectedClipId(newClip.id);
     onClipSelect(newClip);
@@ -316,16 +314,16 @@ const TimelineFixed: React.FC<TimelineProps> = ({
     const rect = timelineRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const newTime = pixelToTime(mouseX);
-    
+
     const clipToResize = timeline.clips.find(clip => clip.id === isResizing.clipId);
     if (!clipToResize) return;
 
     let updatedClip: TimelineClip;
-    
+
     if (isResizing.edge === 'left') {
       const newStartTime = Math.max(0, Math.min(newTime, clipToResize.startTime + clipToResize.duration - 0.1));
       const timeDiff = newStartTime - clipToResize.startTime;
-      
+
       updatedClip = {
         ...clipToResize,
         startTime: newStartTime,
@@ -335,23 +333,23 @@ const TimelineFixed: React.FC<TimelineProps> = ({
     } else {
       const maxEndTime = clipToResize.trimEnd;
       const newDuration = Math.max(0.1, Math.min(newTime - clipToResize.startTime, maxEndTime - clipToResize.trimStart));
-      
+
       updatedClip = {
         ...clipToResize,
         duration: newDuration,
         trimEnd: clipToResize.trimStart + newDuration
       };
     }
-    
-    const updatedClips = timeline.clips.map(clip => 
+
+    const updatedClips = timeline.clips.map(clip =>
       clip.id === isResizing.clipId ? updatedClip : clip
     );
-    
+
     const updatedTimeline = {
       ...timeline,
       clips: updatedClips
     };
-    
+
     onTimelineUpdate(updatedTimeline);
   }, [isResizing, timelineRef, pixelToTime, timeline, onTimelineUpdate]);
 
@@ -411,7 +409,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
     }
 
     document.addEventListener('keydown', handleKeyDown);
-    
+
     return () => {
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
@@ -451,12 +449,12 @@ const TimelineFixed: React.FC<TimelineProps> = ({
 
     try {
       const transferData = e.dataTransfer.getData('application/json');
-      
+
       if (!transferData || transferData.trim() === '') {
         console.warn('Empty drag data detected, ignoring drop');
         return;
       }
-      
+
       let dragData;
       try {
         dragData = JSON.parse(transferData);
@@ -465,7 +463,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
         console.log('Raw transfer data:', transferData);
         return;
       }
-      
+
       if (dragData.type === 'media') {
         const newClip: TimelineClip = {
           id: `clip-${Date.now()}`,
@@ -484,7 +482,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             }
           ] : undefined
         };
-        
+
         const updatedTimeline = {
           ...timeline,
           clips: [...timeline.clips, newClip]
@@ -496,7 +494,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             ? { ...clip, startTime: newStartTime, layer }
             : clip
         );
-        
+
         const updatedTimeline = {
           ...timeline,
           clips: updatedClips
@@ -520,7 +518,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
       clips: updatedClips
     };
     onTimelineUpdate(updatedTimeline);
-    
+
     if (selectedClipId === clipId) {
       setSelectedClipId(null);
     }
@@ -531,7 +529,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
     const markers = [];
     const maxTime = Math.max(timeline.duration, 60);
     const interval = zoom < 0.5 ? 10 : zoom < 1 ? 5 : 1;
-    
+
     for (let i = 0; i <= maxTime; i += interval) {
       markers.push(i);
     }
@@ -563,7 +561,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
               </div>
             )}
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <button
               className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
@@ -583,13 +581,13 @@ const TimelineFixed: React.FC<TimelineProps> = ({
               <ZoomIn className="w-4 h-4 text-dark-400" />
             </button>
           </div>
-          
+
           {/* 性能情報表示（開発用） */}
           <div className="hidden xl:flex items-center space-x-3 text-xs text-gray-500">
             <span>PPS: {pixelsPerSecond.toFixed(0)}</span>
             <span>Width: {timeToPixel(timeline.duration).toFixed(0)}px</span>
           </div>
-          
+
           {/* ショートカット情報 - レスポンシブ対応 */}
           <div className="hidden lg:flex items-center space-x-2 text-xs text-gray-400 min-w-0">
             <span className="truncate">Shortcuts:</span>
@@ -611,7 +609,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2 flex-shrink-0">
           <button 
             className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -627,7 +625,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             <span className="hidden sm:inline">Copy</span>
             {copiedClip && <span className="ml-1 text-xs bg-white/20 px-1 rounded">1</span>}
           </button>
-          
+
           <button 
             className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
               canSplit 
@@ -641,7 +639,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             <Scissors className="w-4 h-4" />
             <span className="hidden sm:inline">Split</span>
           </button>
-          
+
           <button 
             className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
               copiedClip 
@@ -655,7 +653,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Paste</span>
           </button>
-          
+
           <button 
             className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
               selectedClipId && !isAddingTransition
@@ -692,7 +690,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
             >
               <span className="truncate px-2" title="タイムコード">タイムコード</span>
             </div>
-            
+
             {/* Ruler Content */}
             <div className="flex-1 relative overflow-hidden">
               <div 
@@ -710,7 +708,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                     <span className="truncate">{formatTime(time)}</span>
                   </div>
                 ))}
-                
+
                 {/* Playhead */}
                 <motion.div
                   ref={playheadRef}
@@ -744,7 +742,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Track Content */}
                 <div
                   className="flex-1 relative border-b border-dark-700"
@@ -757,7 +755,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                   onDragOver={(e) => e.preventDefault()}
                 >
                   <div className="absolute inset-0 bg-dark-850 hover:bg-dark-800 transition-colors" />
-                  
+
                   {/* Clips on this layer */}
                   <AnimatePresence>
                     {timeline.clips
@@ -791,7 +789,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                             onPointerDown={(e) => handleResizeStart(clip.id, 'left', e)}
                             title="Resize clip start"
                           />
-                          
+
                           {/* クリップコンテンツ - テキスト overflow 対応 */}
                           <div className="flex items-center justify-between h-full px-3 py-1 relative z-10 min-w-0">
                             <div className="flex flex-col justify-center min-w-0 flex-1">
@@ -812,7 +810,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                                 </div>
                               )}
                             </div>
-                            
+
                             <button
                               className="p-1 hover:bg-red-500 rounded opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
                               onClick={(e) => {
@@ -824,24 +822,24 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                               <Trash2 className="w-3 h-3 text-white" />
                             </button>
                           </div>
-                          
+
                           {/* 右端リサイズハンドル */}
                           <div
                             className="absolute right-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
                             onPointerDown={(e) => handleResizeStart(clip.id, 'right', e)}
                             title="Resize clip end"
                           />
-                          
+
                           {/* ドラッグ中の視覚的フィードバック */}
                           {isDraggingClip && draggedClip?.id === clip.id && (
                             <div className="absolute inset-0 border-2 border-yellow-400 rounded-md pointer-events-none animate-pulse" />
                           )}
-                          
+
                           {/* トリムインジケーター */}
                           {(clip.trimStart > 0 || clip.trimEnd < (clip.trimEnd || clip.duration)) && (
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-orange-400/60" title="Trimmed content" />
                           )}
-                          
+
                           {/* トランジションインジケーター */}
                           {clip.transitions?.out && (
                             <div className="absolute -right-2 top-1/2 transform -translate-y-1/2 bg-orange-500 rounded-full p-1 z-20">
@@ -853,7 +851,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                               <ArrowRightLeft className="w-2 h-2 text-white" />
                             </div>
                           )}
-                          
+
                           {/* 選択インジケーター */}
                           {selectedClipId === clip.id && (
                             <div className="absolute inset-0 border-2 border-yellow-400 rounded-md pointer-events-none animate-pulse" />
@@ -879,7 +877,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                     </span>
                   </div>
                 </div>
-                
+
                 <div
                   className="flex-1 relative border-b border-dark-700"
                   style={{ 
@@ -889,7 +887,7 @@ const TimelineFixed: React.FC<TimelineProps> = ({
                   }}
                 >
                   <div className="absolute inset-0 bg-dark-850" />
-                  
+
                   <div
                     className="absolute"
                     style={{

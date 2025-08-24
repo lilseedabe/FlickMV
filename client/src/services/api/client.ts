@@ -14,8 +14,14 @@ import {
   ExportForm
 } from '@/types';
 
+
 // API設定
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  // Prefer Vite-style env
+  (import.meta as any).env?.VITE_API_URL ??
+  // Fallback for CRA-style builds (avoid Node typings)
+  (globalThis as any).process?.env?.REACT_APP_API_URL ??
+  'http://localhost:5000/api';
 const TIMEOUT = 30000; // 30秒
 
 // HTTPエラークラス

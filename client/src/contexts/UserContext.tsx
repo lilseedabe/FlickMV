@@ -237,7 +237,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setError('Logout failed');
       console.error('Logout error:', err);
     } finally {
-      setLoading(false);
+           setLoading(false);
     }
   };
 

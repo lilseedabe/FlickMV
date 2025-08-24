@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "client": "cd client && npm start",
+    "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
     "build": "cd client && npm run build",
     "install-all": "npm install && cd client && npm install && cd ../server && npm install",
@@ -15,7 +15,17 @@
     "lint-all": "cd client && npm run lint && cd ../server && npm run lint",
     "type-check": "cd client && npm run type-check"
   },
-  "keywords": ["video editing", "music video", "AI", "web tool", "BPM detection", "beat sync", "audio analysis", "SNS optimization", "frequency analysis"],
+  "keywords": [
+    "video editing",
+    "music video",
+    "AI",
+    "web tool",
+    "BPM detection",
+    "beat sync",
+    "audio analysis",
+    "SNS optimization",
+    "frequency analysis"
+  ],
   "author": "FlickMV Team",
   "license": "MIT",
   "devDependencies": {

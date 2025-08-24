@@ -131,7 +131,7 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('⏪ 10秒戻るボタンがクリックされました');
+            console.log('⏪ 10秒戻る�EタンがクリチE��されました');
             skipBackward();
           }}
           className="p-2 hover:bg-dark-600 rounded-lg transition-colors control-btn"
@@ -146,7 +146,7 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('🎵 再生/一時停止ボタンがクリックされました:', isPlaying ? '一時停止' : '再生');
+            console.log('🎵 再生/一時停止ボタンがクリチE��されました:', isPlaying ? '一時停止' : '再生');
             onPlayPause();
           }}
           className="p-3 bg-primary-600 hover:bg-primary-700 rounded-full transition-colors control-btn"
@@ -165,7 +165,7 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('⏹️ 停止ボタンがクリックされました');
+            console.log('⏹�E�E停止ボタンがクリチE��されました');
             stop();
           }}
           className="p-2 hover:bg-dark-600 rounded-lg transition-colors control-btn"
@@ -180,7 +180,7 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('⏩ 10秒進むボタンがクリックされました');
+            console.log('⏩ 10秒進むボタンがクリチE��されました');
             skipForward();
           }}
           className="p-2 hover:bg-dark-600 rounded-lg transition-colors control-btn"

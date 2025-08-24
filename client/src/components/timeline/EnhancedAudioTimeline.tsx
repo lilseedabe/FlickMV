@@ -23,10 +23,8 @@ import BPMDetectorComponent from '../audio/BPMDetector';
 import WaveformDisplay from '../waveform/WaveformDisplay';
 
 // 新しい共通フックをインポート
-import {
-  useTimelineScale,
-  useTimelineDrag
-} from '../../hooks/timeline';
+import useTimelineScale from '../../hooks/timeline/useTimelineScale';
+import useTimelineDrag from '../../hooks/timeline/useTimelineDrag';
 
 interface EnhancedAudioTimelineProps {
   timeline: Timeline;
@@ -455,7 +453,7 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
           >
             <div className="max-w-sm mx-auto">
               <Upload className="w-12 h-12 text-dark-500 mx-auto mb-4" />
-              <h4 className="text-lg font-medium text-white mb-2">
+              <h4 className="text-lg font-medium text白 mb-2">
                 音声ファイルを追加
               </h4>
               <p className="text-sm text-gray-400 mb-4">
@@ -590,7 +588,7 @@ const EnhancedAudioTimeline: React.FC<EnhancedAudioTimelineProps> = ({
                           
                           {/* ドラッグ中の視覚的フィードバック */}
                           {isDraggingTrack && draggedTrack?.id === track.id && (
-                            <div className="absolute inset-0 border-2 border-yellow-400 rounded pointer-events-none animate-pulse" />
+                            <div className="absolute inset-0 border-2 border黄色-400 rounded pointer-events-none animate-pulse" />
                           )}
                         </div>
                       ) : (

@@ -16,17 +16,17 @@ dotenv.config();
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// Import routes (will need to be converted to TypeScript)
-import authRoutes from './routes/auth';
-import projectRoutes from './routes/projects';
-import mediaRoutes from './routes/media';
-import exportRoutes from './routes/export';
-import userRoutes from './routes/users';
-import internalRoutes from './routes/internal';
-
-// Import middleware (will need to be converted to TypeScript)
-import authMiddleware from './middleware/auth';
-import { errorHandler } from './middleware/errorHandler';
+ // Load existing JS routes/middleware via require to avoid TS rootDir/type issues
+ // These CJS modules export router/middleware; require() keeps them out of TS compilation set.
+ const authRoutes = require('../routes/auth');
+ const projectRoutes = require('../routes/projects');
+ const mediaRoutes = require('../routes/media');
+ const exportRoutes = require('../routes/export');
+ const userRoutes = require('../routes/users');
+ const internalRoutes = require('../routes/internal');
+ 
+ const { authMiddleware } = require('../middleware/auth');
+ const { errorHandler } = require('../middleware/errorHandler');
 
 // Types
 interface HealthResponse {

@@ -285,12 +285,12 @@ export const useErrorReporting = () => {
     // ユーザーに表示する通知
     error(
       userMessage || 'エラーが発生しました',
-      process.env.NODE_ENV === 'development' ? errorMessage : '技術チームに報告されました。',
+      import.meta.env.MODE === 'development' ? errorMessage : '技術チームに報告されました',
       true
     );
 
     // エラーレポーティングサービスに送信（実際のアプリでは Sentry などを使用）
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.MODE === 'production') {
       console.error('Error reported:', {
         message: errorMessage,
         stack: errorStack,
@@ -301,7 +301,7 @@ export const useErrorReporting = () => {
       });
       
       // 実際のエラーレポーティングサービスへの送信
-      //例: Sentry.captureException(err, { contexts: context });
+      // 例: Sentry.captureException(err, { contexts: context });
     } else {
       console.error('Development error:', err, context);
     }
@@ -313,7 +313,7 @@ export const useErrorReporting = () => {
   ) => {
     warning(message);
     
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.warn('Warning reported:', message, context);
     }
   }, [warning]);

@@ -147,10 +147,10 @@ const SNSOptimizer: React.FC<SNSOptimizerProps> = ({
     }
 
     const hasAudio = project.timeline.audioTracks.length > 0;
-    if ((currentPreset as any).requirements.audioRequired && !hasAudio) {
+    if (currentPreset.requirements.audioRequired && !hasAudio) {
       issues.push('音声トラックが必要です');
     }
-    if ((currentPreset as any).requirements.captionsRecommended) {
+    if (currentPreset.requirements.captionsRecommended) {
       suggestions.push('字幕の追加を検討してください');
     }
 

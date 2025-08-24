@@ -54,7 +54,7 @@ class TimelineErrorBoundary extends Component<Props, State> {
     }
 
     // 開発時のコンソールログ
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.group('🚨 Timeline Error Boundary');
       console.error('Error:', error);
       console.error('Error Info:', errorInfo);
@@ -90,9 +90,9 @@ class TimelineErrorBoundary extends Component<Props, State> {
         body: JSON.stringify(errorReport)
       });
 
-      console.log('✅ Error report sent:', errorReport.errorId);
+      console.log('✓ Error report sent:', errorReport.errorId);
     } catch (reportError) {
-      console.error('❌ Failed to send error report:', reportError);
+      console.error('✗ Failed to send error report:', reportError);
     }
   };
 
@@ -222,7 +222,7 @@ class TimelineErrorBoundary extends Component<Props, State> {
       const canRetry = this.retryCount < this.maxRetries;
 
       return (
-        <div className="min-h-[400px] bg-dark-900 border border-red-500/30 rounded-lg flex items-center justify-center p-8">
+        <div className="min-h-[400px] bg-gray-900 border border-red-500/30 rounded-lg flex items-center justify-center p-8">
           <div className="max-w-2xl w-full text-center space-y-6">
             {/* エラーアイコンとタイトル */}
             <div className="space-y-4">
@@ -265,7 +265,7 @@ class TimelineErrorBoundary extends Component<Props, State> {
                   <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">
                     Technical Details
                   </summary>
-                  <pre className="mt-2 text-xs text-gray-500 bg-dark-800 p-2 rounded overflow-auto max-h-32 font-mono">
+                  <pre className="mt-2 text-xs text-gray-500 bg-gray-800 p-2 rounded overflow-auto max-h-32 font-mono">
                     {error.stack}
                   </pre>
                 </details>

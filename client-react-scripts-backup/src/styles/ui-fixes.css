@@ -1,0 +1,455 @@
+/* FlickMV UI修正用スタイル */
+
+/* ================================
+   Timeline UI修正
+   ================================ */
+
+/* タイムラインコンテナの基本設定 */
+.timeline-container {
+  position: relative;
+  z-index: 1;
+  overflow-x: auto;
+  overflow-y: visible;
+  min-height: 200px;
+  background: #0f172a; /* dark-900 */
+}
+
+/* タイムラインクリップの基本設定 */
+.timeline-clip {
+  position: absolute;
+  z-index: 10;
+  min-width: 50px;
+  min-height: 40px;
+  cursor: move;
+  user-select: none;
+  border-radius: 6px;
+  overflow: hidden;
+  
+  /* テキスト重なり防止 */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  
+  /* ドラッグ中の視覚的改善 */
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.timeline-clip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-clip.dragging {
+  z-index: 50;
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* クリップテキストの改良 */
+.clip-label {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  font-size: 11px;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* タイムライントラックの改良 */
+.timeline-track {
+  min-height: 60px;
+  margin-bottom: 2px;
+  position: relative;
+  border-bottom: 1px solid #374151; /* dark-700 */
+}
+
+.timeline-track:hover {
+  background-color: rgba(55, 65, 81, 0.3); /* dark-700 with opacity */
+}
+
+/* リサイズハンドルの改良 */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover,
+.timeline-clip:hover .resize-handle {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.resize-handle.left {
+  left: 0;
+  border-radius: 6px 0 0 6px;
+}
+
+.resize-handle.right {
+  right: 0;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ================================
+   MediaLibrary UI修正
+   ================================ */
+
+/* メディアライブラリコンテナ */
+.media-library-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1e293b; /* dark-800 */
+}
+
+/* メディアグリッドの改良 */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.media-grid-item {
+  background: #374151; /* dark-700 */
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.media-grid-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* メディアサムネイルの改良 */
+.media-thumbnail {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #4b5563; /* dark-600 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.media-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* メディア情報の改良 */
+.media-info {
+  padding: 12px;
+  background: #374151; /* dark-700 */
+}
+
+.media-info h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-info p {
+  font-size: 12px;
+  color: #9ca3af; /* dark-400 */
+  margin: 0;
+}
+
+/* ================================
+   コントロールパネル修正
+   ================================ */
+
+/* コントロールボタンの基本設定 */
+.control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: #374151; /* dark-700 */
+  border: 1px solid #4b5563; /* dark-600 */
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  z-index: 10;
+  position: relative;
+}
+
+.control-btn:hover {
+  background: #4b5563; /* dark-600 */
+  border-color: #6b7280; /* dark-500 */
+  transform: translateY(-1px);
+}
+
+.control-btn:active {
+  transform: translateY(0);
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* プライマリボタン */
+.control-btn.primary {
+  background: #8b5cf6; /* purple-500 */
+  border-color: #7c3aed; /* purple-600 */
+}
+
+.control-btn.primary:hover {
+  background: #7c3aed; /* purple-600 */
+  border-color: #6d28d9; /* purple-700 */
+}
+
+/* セカンダリボタン */
+.control-btn.secondary {
+  background: #059669; /* emerald-600 */
+  border-color: #047857; /* emerald-700 */
+}
+
+.control-btn.secondary:hover {
+  background: #047857; /* emerald-700 */
+  border-color: #065f46; /* emerald-800 */
+}
+
+/* 危険ボタン */
+.control-btn.danger {
+  background: #dc2626; /* red-600 */
+  border-color: #b91c1c; /* red-700 */
+}
+
+.control-btn.danger:hover {
+  background: #b91c1c; /* red-700 */
+  border-color: #991b1b; /* red-800 */
+}
+
+/* ================================
+   レスポンシブ対応
+   ================================ */
+
+/* モバイル・タブレット対応 */
+@media (max-width: 768px) {
+  .timeline-clip {
+    min-width: 40px;
+    min-height: 35px;
+  }
+  
+  .clip-label {
+    font-size: 10px;
+  }
+  
+  .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+    padding: 12px;
+  }
+  
+  .control-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .timeline-clip {
+    min-width: 30px;
+    min-height: 30px;
+  }
+  
+  .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px;
+    padding: 8px;
+  }
+  
+  .control-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* ================================
+   アニメーション改良
+   ================================ */
+
+/* ローディングアニメーション */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ドラッグアニメーション */
+@keyframes drag-highlight {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.8);
+  }
+}
+
+.drag-target {
+  animation: drag-highlight 1s ease-in-out infinite;
+}
+
+/* ================================
+   アクセシビリティ
+   ================================ */
+
+/* フォーカス状態の改良 */
+.control-btn:focus,
+.timeline-clip:focus {
+  outline: 2px solid #8b5cf6; /* purple-500 */
+  outline-offset: 2px;
+}
+
+/* 高コントラストモード対応 */
+@media (prefers-contrast: high) {
+  .timeline-clip {
+    border: 2px solid white;
+  }
+  
+  .control-btn {
+    border: 2px solid white;
+  }
+}
+
+/* 動作軽減設定対応 */
+@media (prefers-reduced-motion: reduce) {
+  .timeline-clip,
+  .control-btn,
+  .media-grid-item {
+    transition: none;
+  }
+  
+  .loading {
+    animation: none;
+  }
+}
+
+/* ================================
+   スクロールバーカスタマイズ
+   ================================ */
+
+/* WebKit系ブラウザ */
+.timeline-container::-webkit-scrollbar,
+.media-library-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.timeline-container::-webkit-scrollbar-track,
+.media-library-container::-webkit-scrollbar-track {
+  background: #1e293b; /* dark-800 */
+}
+
+.timeline-container::-webkit-scrollbar-thumb,
+.media-library-container::-webkit-scrollbar-thumb {
+  background: #4b5563; /* dark-600 */
+  border-radius: 4px;
+}
+
+.timeline-container::-webkit-scrollbar-thumb:hover,
+.media-library-container::-webkit-scrollbar-thumb:hover {
+  background: #6b7280; /* dark-500 */
+}
+
+/* Firefox */
+.timeline-container,
+.media-library-container {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 #1e293b;
+}
+
+/* ================================
+   ツールチップ
+   ================================ */
+
+.tooltip {
+  position: relative;
+}
+
+.tooltip::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+}
+
+.tooltip:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ================================
+   エラー状態の表示
+   ================================ */
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #ef4444; /* red-500 */
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  margin: 16px;
+}
+
+.error-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.error-state p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.8;
+}

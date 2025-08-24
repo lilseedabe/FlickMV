@@ -93,7 +93,7 @@ const AudioAnalysis: React.FC<AudioAnalysisProps> = ({ mediaFile, onClose }) => 
 
     try {
       // 解析開始
-      // 存在しない場合はサーバ側のAPIに合わせてapiService側の実装が必要
+      // 存在しない場合、サーバー側のAPIに合わせてapiService側の実装が必要
       // @ts-ignore
       await apiService.analyzeAudio(mediaFile.id, options);
 
@@ -287,7 +287,7 @@ const AudioAnalysis: React.FC<AudioAnalysisProps> = ({ mediaFile, onClose }) => 
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="モダン">モダン</option>
-                  <option value="シネマティック">シネマティック</option>
+                  <option value="シネマチック">シネマチック</option>
                   <option value="アニメ風">アニメ風</option>
                   <option value="リアリスティック">リアリスティック</option>
                   <option value="アート">アート</option>

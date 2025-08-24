@@ -43,8 +43,7 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
     const errors: string[] = [];
     
     // 各ファイルを処理
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    const processFile = async (file: File) => {
       const fileId = `${file.name}_${file.size}_${Date.now()}`;
       
       try {
@@ -52,7 +51,7 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
         const validation = validateFile(file);
         if (!validation.isValid) {
           errors.push(`${file.name}: ${validation.error}`);
-          continue;
+          return null;
         }
         
         if (validation.warnings) {
@@ -77,22 +76,34 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
         const mediaFile = await processMediaFile(file);
         updateProgress(80);
         
-        processedFiles.push(mediaFile);
         updateProgress(100);
         
-        // 完了後に進捗を削除
+        // 完了時に進捗を削除
         setTimeout(() => {
           const currentProcessing = new Map(processingFiles);
           currentProcessing.delete(fileId);
           setProcessingFiles(currentProcessing);
         }, 1000);
         
+        return mediaFile;
+        
       } catch (error) {
         console.error(`Failed to process ${file.name}:`, error);
-        errors.push(`${file.name}: 処理に失敗しました`);
+        errors.push(`${file.name}: 処理が失敗しました`);
         newProcessingFiles.delete(fileId);
+        return null;
       }
-    }
+    };
+
+    // 並列処理でファイルを処理
+    const results = await Promise.all(files.map(file => processFile(file)));
+    
+    // 有効な結果をフィルタリング
+    results.forEach(result => {
+      if (result) {
+        processedFiles.push(result);
+      }
+    });
     
     // エラーを表示
     if (errors.length > 0) {
@@ -215,13 +226,13 @@ const MediaLibrary: React.FC<MediaLibraryProps> = ({
       
       // イベントリスナー設定
       audio.addEventListener('loadeddata', () => {
-        console.log('📊 音楽データ読み込み完了:', file.name);
+        console.log('📊 音楽データ読み込み完了', file.name);
         audio.play().then(() => {
           setCurrentlyPlaying(file.id);
           setAudioRef(audio);
           console.log(`🎵 音楽再生開始: ${file.name}`);
         }).catch((playError) => {
-          console.error('再生失敗:', playError);
+          console.error('再生失敗', playError);
           if (audioSrc.startsWith('blob:')) {
             URL.revokeObjectURL(audioSrc);
           }

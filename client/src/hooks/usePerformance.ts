@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAdaptiveLoading } from './useResponsive';
 
-// 仮想化リストのためのフック
+/**
+ * 仮想化リスト用フック
+ */
 export const useVirtualization = <T>(
   items: T[],
   itemHeight: number,
@@ -42,7 +44,9 @@ export const useVirtualization = <T>(
   };
 };
 
-// 遅延読み込みフック
+/**
+ * 遅延読み込みフック（IntersectionObserver）
+ */
 export const useLazyLoading = (
   options: {
     threshold?: number;
@@ -63,7 +67,7 @@ export const useLazyLoading = (
       ([entry]) => {
         const isIntersecting = entry.isIntersecting;
         setIsVisible(isIntersecting);
-        
+
         if (isIntersecting && !hasBeenVisible) {
           setHasBeenVisible(true);
         }
@@ -90,7 +94,9 @@ export const useLazyLoading = (
   };
 };
 
-// 画像遅延読み込みフック
+/**
+ * 画像遅延読み込みフック
+ */
 export const useLazyImage = (
   src: string,
   options: {
@@ -108,16 +114,16 @@ export const useLazyImage = (
   useEffect(() => {
     if (shouldLoad && src && !isLoaded && !hasError) {
       const img = new Image();
-      
+
       img.onload = () => {
         setImageSrc(src);
         setIsLoaded(true);
       };
-      
+
       img.onerror = () => {
         setHasError(true);
       };
-      
+
       img.src = src;
     }
   }, [shouldLoad, src, isLoaded, hasError]);
@@ -131,7 +137,9 @@ export const useLazyImage = (
   };
 };
 
-// デバウンスフック
+/**
+ * デバウンスフック
+ */
 export const useDebounce = <T>(value: T, delay: number): T => {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
@@ -148,7 +156,9 @@ export const useDebounce = <T>(value: T, delay: number): T => {
   return debouncedValue;
 };
 
-// スロットルフック
+/**
+ * スロットルフック
+ */
 export const useThrottle = <T extends (...args: any[]) => any>(
   callback: T,
   delay: number
@@ -166,7 +176,9 @@ export const useThrottle = <T extends (...args: any[]) => any>(
   );
 };
 
-// メモ化されたコンポーネント選択フック
+/**
+ * メモ化されたコールバック選択フック
+ */
 export const useMemoizedCallback = <T extends (...args: any[]) => any>(
   callback: T,
   deps: React.DependencyList
@@ -174,7 +186,9 @@ export const useMemoizedCallback = <T extends (...args: any[]) => any>(
   return useCallback(callback, deps);
 };
 
-// レンダリング最適化フック
+/**
+ * レンダリング最適化フック
+ */
 export const useRenderOptimization = () => {
   const { optimizationLevel, shouldReduceAnimations } = useAdaptiveLoading();
   const renderCountRef = useRef(0);
@@ -183,21 +197,27 @@ export const useRenderOptimization = () => {
     renderCountRef.current += 1;
   });
 
-  const shouldSkipRender = useCallback((condition: boolean) => {
-    return optimizationLevel === 'high' && condition;
-  }, [optimizationLevel]);
+  const shouldSkipRender = useCallback(
+    (condition: boolean) => {
+      return optimizationLevel === 'high' && condition;
+    },
+    [optimizationLevel]
+  );
 
-  const getOptimizedProps = useCallback((baseProps: Record<string, any>) => {
-    if (optimizationLevel === 'high') {
-      // 高度な最適化: アニメーションを無効化
-      return {
-        ...baseProps,
-        transition: shouldReduceAnimations ? { duration: 0 } : baseProps.transition,
-        animate: shouldReduceAnimations ? {} : baseProps.animate,
-      };
-    }
-    return baseProps;
-  }, [optimizationLevel, shouldReduceAnimations]);
+  const getOptimizedProps = useCallback(
+    (baseProps: Record<string, any>) => {
+      if (optimizationLevel === 'high') {
+        // 高度な最適化: アニメーションを無効化
+        return {
+          ...baseProps,
+          transition: shouldReduceAnimations ? { duration: 0 } : baseProps.transition,
+          animate: shouldReduceAnimations ? {} : baseProps.animate,
+        };
+      }
+      return baseProps;
+    },
+    [optimizationLevel, shouldReduceAnimations]
+  );
 
   return {
     renderCount: renderCountRef.current,
@@ -208,10 +228,12 @@ export const useRenderOptimization = () => {
   };
 };
 
-// ワーカー管理フック
+/**
+ * Web Worker 管理フック
+ */
 export const useWebWorker = (
   workerScript: string,
-  options: { 
+  options: {
     dependencies?: string[];
     timeout?: number;
   } = {}
@@ -223,15 +245,15 @@ export const useWebWorker = (
   useEffect(() => {
     try {
       const workerInstance = new Worker(workerScript);
-      
+
       workerInstance.onmessage = (e) => {
-        if (e.data.type === 'ready') {
+        if ((e as MessageEvent).data?.type === 'ready') {
           setIsReady(true);
         }
       };
 
       workerInstance.onerror = (e) => {
-        setError(e.message);
+        setError((e as ErrorEvent).message);
       };
 
       setWorker(workerInstance);
@@ -244,35 +266,37 @@ export const useWebWorker = (
     }
   }, [workerScript]);
 
-  const postMessage = useCallback((data: any) => {
-    if (worker && isReady) {
-      worker.postMessage(data);
-    }
-  }, [worker, isReady]);
-
-  const postMessageWithCallback = useCallback((
-    data: any,
-    callback: (result: any) => void,
-    timeout: number = options.timeout || 5000
-  ) => {
-    if (!worker || !isReady) return;
-
-    const messageId = Math.random().toString(36).substr(2, 9);
-    const timeoutId = setTimeout(() => {
-      callback({ error: 'Worker timeout' });
-    }, timeout);
-
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data.id === messageId) {
-        clearTimeout(timeoutId);
-        worker.removeEventListener('message', handleMessage);
-        callback(e.data.result);
+  const postMessage = useCallback(
+    (data: any) => {
+      if (worker && isReady) {
+        worker.postMessage(data);
       }
-    };
+    },
+    [worker, isReady]
+  );
 
-    worker.addEventListener('message', handleMessage);
-    worker.postMessage({ ...data, id: messageId });
-  }, [worker, isReady, options.timeout]);
+  const postMessageWithCallback = useCallback(
+    (data: any, callback: (result: any) => void, timeout: number = options.timeout || 5000) => {
+      if (!worker || !isReady) return;
+
+      const messageId = Math.random().toString(36).substr(2, 9);
+      const timeoutId = setTimeout(() => {
+        callback({ error: 'Worker timeout' });
+      }, timeout);
+
+      const handleMessage = (e: MessageEvent) => {
+        if ((e as MessageEvent).data?.id === messageId) {
+          clearTimeout(timeoutId);
+          worker.removeEventListener('message', handleMessage);
+          callback((e as MessageEvent).data.result);
+        }
+      };
+
+      worker.addEventListener('message', handleMessage);
+      worker.postMessage({ ...data, id: messageId });
+    },
+    [worker, isReady, options.timeout]
+  );
 
   return {
     worker,
@@ -283,7 +307,9 @@ export const useWebWorker = (
   };
 };
 
-// キャッシュ管理フック
+/**
+ * キャッシュ管理フック
+ */
 export const useCache = <T>(
   key: string,
   fetchFunction: () => Promise<T>,
@@ -300,48 +326,51 @@ export const useCache = <T>(
 
   const isStale = Date.now() - lastFetch > ttl;
 
-  const fetchData = useCallback(async (forceRefresh = false) => {
-    const cachedData = localStorage.getItem(`cache_${key}`);
-    const cachedTimestamp = localStorage.getItem(`cache_${key}_timestamp`);
+  const fetchData = useCallback(
+    async (forceRefresh = false) => {
+      const cachedData = localStorage.getItem(`cache_${key}`);
+      const cachedTimestamp = localStorage.getItem(`cache_${key}_timestamp`);
 
-    // キャッシュが有効で、強制更新でない場合
-    if (!forceRefresh && cachedData && cachedTimestamp) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      if (Date.now() - timestamp < ttl) {
-        try {
-          const parsed = JSON.parse(cachedData);
-          setData(parsed);
-          setLastFetch(timestamp);
-          return parsed;
-        } catch {
-          // キャッシュが破損している場合は削除
-          localStorage.removeItem(`cache_${key}`);
-          localStorage.removeItem(`cache_${key}_timestamp`);
+      // キャッシュが有効で、強制更新でない場合
+      if (!forceRefresh && cachedData && cachedTimestamp) {
+        const timestamp = parseInt(cachedTimestamp, 10);
+        if (Date.now() - timestamp < ttl) {
+          try {
+            const parsed = JSON.parse(cachedData);
+            setData(parsed);
+            setLastFetch(timestamp);
+            return parsed;
+          } catch {
+            // キャッシュが破損している場合は削除
+            localStorage.removeItem(`cache_${key}`);
+            localStorage.removeItem(`cache_${key}_timestamp`);
+          }
         }
       }
-    }
 
-    setIsLoading(true);
-    setError(null);
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const result = await fetchFunction();
-      setData(result);
-      setLastFetch(Date.now());
+      try {
+        const result = await fetchFunction();
+        setData(result);
+        setLastFetch(Date.now());
 
-      // キャッシュに保存
-      localStorage.setItem(`cache_${key}`, JSON.stringify(result));
-      localStorage.setItem(`cache_${key}_timestamp`, Date.now().toString());
+        // キャッシュに保存
+        localStorage.setItem(`cache_${key}`, JSON.stringify(result));
+        localStorage.setItem(`cache_${key}_timestamp`, Date.now().toString());
 
-      return result;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Unknown error');
-      setError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [key, fetchFunction, ttl]);
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Unknown error');
+        setError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [key, fetchFunction, ttl]
+  );
 
   // 初回読み込み
   useEffect(() => {
@@ -352,7 +381,7 @@ export const useCache = <T>(
   useEffect(() => {
     if (staleWhileRevalidate && isStale && data) {
       fetchData(true).catch(() => {
-        // サイレントに失敗（既存のデータを保持）
+        // サイレントに失敗（既存データを保持）
       });
     }
   }, [staleWhileRevalidate, isStale, data, fetchData]);
@@ -374,7 +403,9 @@ export const useCache = <T>(
   };
 };
 
-// バッチ処理フック
+/**
+ * バッチ処理フック
+ */
 export const useBatchProcessor = <T, R>(
   processor: (items: T[]) => Promise<R[]>,
   options: {
@@ -386,15 +417,15 @@ export const useBatchProcessor = <T, R>(
   const { batchSize = 10, delay = 100, maxWait = 1000 } = options;
   const [queue, setQueue] = useState<T[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
-  const maxWaitTimeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxWaitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const processBatch = useCallback(async () => {
     if (queue.length === 0) return;
 
     setIsProcessing(true);
     const batch = queue.slice(0, batchSize);
-    setQueue(prev => prev.slice(batchSize));
+    setQueue((prev) => prev.slice(batchSize));
 
     try {
       await processor(batch);
@@ -405,48 +436,53 @@ export const useBatchProcessor = <T, R>(
     }
   }, [queue, batchSize, processor]);
 
-  const addItem = useCallback((item: T) => {
-    setQueue(prev => [...prev, item]);
+  const addItem = useCallback(
+    (item: T) => {
+      setQueue((prev) => [...prev, item]);
 
-    // 遅延処理をクリア
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    // 最大待機時間のタイマーを設定
-    if (!maxWaitTimeoutRef.current) {
-      maxWaitTimeoutRef.current = setTimeout(() => {
-        processBatch();
-        maxWaitTimeoutRef.current = undefined;
-      }, maxWait);
-    }
-
-    // バッチサイズに達したら即座に処理
-    if (queue.length + 1 >= batchSize) {
-      processBatch();
-      if (maxWaitTimeoutRef.current) {
-        clearTimeout(maxWaitTimeoutRef.current);
-        maxWaitTimeoutRef.current = undefined;
+      // 遅延処理のクリア
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
-    } else {
-      // 遅延処理を設定
-      timeoutRef.current = setTimeout(() => {
+
+      // 最大待機時間タイマーを設定
+      if (!maxWaitTimeoutRef.current) {
+        maxWaitTimeoutRef.current = setTimeout(() => {
+          processBatch();
+          maxWaitTimeoutRef.current = null;
+        }, maxWait);
+      }
+
+      // バッチサイズに達したら即座に処理
+      if (queue.length + 1 >= batchSize) {
         processBatch();
         if (maxWaitTimeoutRef.current) {
           clearTimeout(maxWaitTimeoutRef.current);
-          maxWaitTimeoutRef.current = undefined;
+          maxWaitTimeoutRef.current = null;
         }
-      }, delay);
-    }
-  }, [queue.length, batchSize, delay, maxWait, processBatch]);
+      } else {
+        // 遅延処理を設定
+        timeoutRef.current = setTimeout(() => {
+          processBatch();
+          if (maxWaitTimeoutRef.current) {
+            clearTimeout(maxWaitTimeoutRef.current);
+            maxWaitTimeoutRef.current = null;
+          }
+        }, delay);
+      }
+    },
+    [queue.length, batchSize, delay, maxWait, processBatch]
+  );
 
   const flush = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
     if (maxWaitTimeoutRef.current) {
       clearTimeout(maxWaitTimeoutRef.current);
-      maxWaitTimeoutRef.current = undefined;
+      maxWaitTimeoutRef.current = null;
     }
     processBatch();
   }, [processBatch]);

@@ -53,7 +53,17 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
       
       // AudioTrackにoriginalFileがあるかチェック
       if (audioTrack.originalFile) {
-        arrayBuffer = await audioTrack.originalFile.arrayBuffer();
+        try {
+          arrayBuffer = await audioTrack.originalFile.arrayBuffer();
+        } catch (fileError) {
+          console.warn('Original file processing failed, falling back to URL', fileError);
+          // フォールバック: URLを使用
+          const response = await fetch(audioUrl);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          arrayBuffer = await response.arrayBuffer();
+        }
       } else {
         // フォールバック: URLを使用
         const response = await fetch(audioUrl);
@@ -88,11 +98,16 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
         peaks[i] = i % 2 === 0 ? max : min;
       }
       
-      return {
+      const result = {
         peaks,
         length: audioBuffer.length,
         sampleRate: audioBuffer.sampleRate
       };
+      
+      // AudioContextをクローズ
+      audioContext.close();
+      
+      return result;
     } catch (err) {
       console.error('波形データ生成エラー:', err);
       setError('波形の読み込みに失敗しました');
@@ -100,25 +115,35 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [width, audioTrack]);
+  }, [width, audioTrack, waveformData]);
 
   // 音声ファイルが変更された時に波形データを生成（最適化版）
   useEffect(() => {
     let isMounted = true;
     
-    if (audioTrack.url && !waveformData) {
-      console.log('📁 波形生成: 原始Fileオブジェクトを使用');
-      generateWaveformData(audioTrack.url).then((data) => {
-        if (isMounted) {
-          setWaveformData(data);
+    const loadWaveformData = async () => {
+      if (audioTrack.url && !waveformData) {
+        console.log('📁 波形生成: 原始Fileオブジェクトを使用');
+        try {
+          const data = await generateWaveformData(audioTrack.url);
+          if (isMounted) {
+            setWaveformData(data);
+          }
+        } catch (error) {
+          console.error('Waveform data loading failed:', error);
+          if (isMounted) {
+            setError('波形データの読み込みに失敗しました');
+          }
         }
-      });
-    }
+      }
+    };
+    
+    loadWaveformData();
     
     return () => {
       isMounted = false;
     };
-  }, [audioTrack.url, audioTrack.id]); // generateWaveformDataを依存配列から除外
+  }, [audioTrack.url, audioTrack.id, generateWaveformData]);
 
   // 波形を描画
   const drawWaveform = useCallback(() => {

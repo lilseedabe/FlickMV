@@ -2,17 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'react-router-dom';
 
-// Fixed Components
-import MediaLibraryFixed from '../components/media/MediaLibraryFixed';
-import TimelineFixed from '../components/timeline/TimelineFixed';
+// Components
+import BeatTimeline from '../components/timeline/BeatTimeline';
 import Preview from '../components/preview/Preview';
 import PlaybackControls from '../components/editor/PlaybackControls';
-import RightPanelFixed from '../components/panels/RightPanelFixed';
 import { ExportPanel, ExportProgress } from '../components/export';
 
-// Context
-import { useUser } from '../contexts/UserContext';
-
+// Icons
 import {
   Play,
   Pause,
@@ -22,264 +18,47 @@ import {
   Settings,
   Download,
   Upload,
-  Layers,
-  Eye,
-  EyeOff,
-  Type,
-  Image,
   Video,
   Music,
-  Scissors,
-  RotateCw,
-  Move,
-  Zap,
-  Sparkles,
+  Image,
   HelpCircle,
   ChevronRight,
   ChevronDown,
   ChevronLeft,
   X,
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  Square,
-  Circle,
-  Crown,
-  Lock,
-  Star,
-  Info,
-  AlertCircle,
-  Save,
   FolderOpen,
   GripVertical,
   Monitor,
   Smartphone,
-  Tablet,
+  Square,
   ExternalLink,
-  Maximize2,
-  Minimize2,
   PictureInPicture2,
-  Camera,
-  RotateCcw,
-  CheckCircle
+  CheckCircle,
+  Lock,
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 // Types
-import type { Project, TimelineClip, MediaFile, Resolution, ExportJob } from '../types';
-import { processMediaFile } from '../utils/media/mediaProcessor';
-
-// PopupPreview Manager (same as before)
-class PreviewWindowManager {
-  private windows: Map<string, Window> = new Map();
-  private eventListeners: Map<string, () => void> = new Map();
-
-  createWindow(config: {
-    id: string;
-    title: string;
-    width: number;
-    height: number;
-    resolution: Resolution;
-  }): Window | null {
-    const { id, title, width, height } = config;
-    
-    const left = window.screenX + (window.outerWidth - width) / 2 + (this.windows.size * 30);
-    const top = window.screenY + (window.outerHeight - height) / 2 + (this.windows.size * 30);
-
-    const windowFeatures = [
-      `width=${width}`,
-      `height=${height}`,
-      `left=${left}`,
-      `top=${top}`,
-      'toolbar=no',
-      'menubar=no',
-      'scrollbars=no',
-      'resizable=yes',
-      'status=no',
-      'directories=no',
-      'location=no'
-    ].join(',');
-
-    try {
-      const newWindow = window.open('', `preview_${id}`, windowFeatures);
-      
-      if (newWindow) {
-        this.initializeWindow(newWindow, config);
-        this.windows.set(id, newWindow);
-        
-        const cleanup = () => {
-          this.windows.delete(id);
-          this.eventListeners.delete(id);
-        };
-        
-        newWindow.addEventListener('beforeunload', cleanup);
-        this.eventListeners.set(id, cleanup);
-        
-        return newWindow;
-      }
-    } catch (error) {
-      console.error('プレビューウィンドウの作成に失敗:', error);
-    }
-    
-    return null;
-  }
-
-  private initializeWindow(window: Window, config: any) {
-    const doc = window.document;
-    doc.title = `FlickMV Preview - ${config.title}`;
-    
-    doc.head.innerHTML = `
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          background: #000; color: #fff;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          overflow: hidden; display: flex; flex-direction: column; height: 100vh;
-        }
-        .preview-header {
-          background: #1a1a1a; padding: 8px 12px; border-bottom: 1px solid #333;
-          display: flex; align-items: center; justify-content: space-between;
-          font-size: 12px; height: 32px;
-        }
-        .preview-title { color: #22c55e; font-weight: bold; }
-        .preview-info { color: #888; }
-        .preview-content {
-          flex: 1; display: flex; align-items: center; justify-content: center;
-          background: #000; position: relative;
-        }
-        .preview-video { max-width: 100%; max-height: 100%; border-radius: 4px; }
-        .preview-placeholder {
-          border: 2px dashed #444; border-radius: 8px; padding: 40px;
-          text-align: center; color: #666;
-        }
-        .preview-controls {
-          position: absolute; bottom: 16px; right: 16px;
-          background: rgba(0,0,0,0.8); border-radius: 8px; padding: 8px;
-          display: flex; gap: 8px;
-        }
-        .control-btn {
-          background: #333; border: none; color: #fff; padding: 4px 8px;
-          border-radius: 4px; font-size: 11px; cursor: pointer;
-        }
-        .control-btn:hover { background: #555; }
-        .resolution-indicator {
-          position: absolute; top: 16px; left: 16px;
-          background: rgba(34, 197, 94, 0.9); color: white;
-          padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;
-        }
-      </style>
-    `;
-    
-    doc.body.innerHTML = `
-      <div class="preview-header">
-        <div class="preview-title">🎯 ${config.title}</div>
-        <div class="preview-info">${config.resolution} プレビュー</div>
-      </div>
-      <div class="preview-content">
-        <div id="preview-container">
-          <div class="preview-placeholder">
-            <div style="font-size: 48px; margin-bottom: 16px;">🎬</div>
-            <div>プレビューを読み込み中...</div>
-          </div>
-        </div>
-        <div class="resolution-indicator">${config.resolution}</div>
-        <div class="preview-controls">
-          <button class="control-btn" onclick="window.close()">✕ 閉じる</button>
-          <button class="control-btn" onclick="toggleFullscreen()">⛶ フルスクリーン</button>
-          <button class="control-btn" onclick="captureFrame()">📷 キャプチャ</button>
-        </div>
-      </div>
-    `;
-    
-    (window as any).toggleFullscreen = () => {
-      if (doc.fullscreenElement) {
-        doc.exitFullscreen();
-      } else {
-        doc.documentElement.requestFullscreen();
-      }
-    };
-    
-    (window as any).captureFrame = () => {
-      alert('フレームキャプチャ機能は開発中です');
-    };
-  }
-
-  updatePreview(windowId: string, content: string) {
-    const window = this.windows.get(windowId);
-    if (!window) return;
-
-    const container = window.document.getElementById('preview-container');
-    if (container) {
-      container.innerHTML = `
-        <div class="preview-video" style="
-          width: 100%; height: 100%; background: linear-gradient(45deg, #1a1a1a, #2a2a2a);
-          display: flex; align-items: center; justify-content: center;
-          color: #22c55e; font-size: 16px; font-weight: bold;
-        ">
-          ${content}
-        </div>
-      `;
-    }
-  }
-
-  closeWindow(windowId: string) {
-    const window = this.windows.get(windowId);
-    if (window) {
-      window.close();
-      this.windows.delete(windowId);
-      
-      const cleanup = this.eventListeners.get(windowId);
-      if (cleanup) {
-        cleanup();
-        this.eventListeners.delete(windowId);
-      }
-    }
-  }
-
-  closeAllWindows() {
-    this.windows.forEach((window, id) => {
-      this.closeWindow(id);
-    });
-  }
-
-  isWindowOpen(windowId: string): boolean {
-    const window = this.windows.get(windowId);
-    return window ? !window.closed : false;
-  }
-
-  getWindow(windowId: string): Window | null {
-    return this.windows.get(windowId) || null;
-  }
-
-  updatePreviewWithCanvas(windowId: string, sourceCanvas: HTMLCanvasElement) {
-    const window = this.windows.get(windowId);
-    if (!window || window.closed) return;
-
-    const canvas = window.document.getElementById('preview-canvas') as HTMLCanvasElement;
-    if (canvas && sourceCanvas) {
-      const ctx = canvas.getContext('2d');
-      const sourceCtx = sourceCanvas.getContext('2d');
-      
-      if (ctx && sourceCtx) {
-        canvas.width = sourceCanvas.width;
-        canvas.height = sourceCanvas.height;
-        ctx.drawImage(sourceCanvas, 0, 0);
-      }
-    }
-  }
-
-  updateAllPreviews(sourceCanvas: HTMLCanvasElement) {
-    this.windows.forEach((window, windowId) => {
-      if (!window.closed) {
-        this.updatePreviewWithCanvas(windowId, sourceCanvas);
-      } else {
-        this.windows.delete(windowId);
-      }
-    });
-  }
-}
+import type { 
+  Project, 
+  TimelineClip, 
+  MediaFile, 
+  Resolution, 
+  ExportJob,
+  BPMAnalysis,
+  BeatGrid
+} from '../types';
 
 // Video resolution options
-const VIDEO_RESOLUTIONS: Record<Resolution, { width: number; height: number; label: string; icon: any; windowSize: { width: number; height: number } }> = {
+const VIDEO_RESOLUTIONS: Record<Resolution, { 
+  width: number; 
+  height: number; 
+  label: string; 
+  icon: any; 
+  windowSize: { width: number; height: number } 
+}> = {
   '9:16': { 
     width: 1080, height: 1920, label: 'モバイル (9:16)', icon: Smartphone,
     windowSize: { width: 380, height: 700 }
@@ -293,7 +72,7 @@ const VIDEO_RESOLUTIONS: Record<Resolution, { width: number; height: number; lab
     windowSize: { width: 500, height: 550 }
   },
   '4:3': { 
-    width: 1440, height: 1080, label: 'クラシック (4:3)', icon: Tablet,
+    width: 1440, height: 1080, label: 'クラシック (4:3)', icon: Monitor,
     windowSize: { width: 600, height: 500 }
   },
   '720p': { 
@@ -346,40 +125,27 @@ const createEmptyProject = (): Project => {
   };
 };
 
-// シングルトンインスタンス
-const previewManager = new PreviewWindowManager();
-
 /**
- * 🎯 FlickMV Editor - 完全修正版
- * 
- * 修正内容:
- * ✅ Grid ベースレイアウトで左右サイドバーと中央タイムラインの幅配分を改善
- * ✅ タイムライン上のルーラーを sticky position で固定、重なり問題を解決
- * ✅ クリップラベルやサイドパネルの文字切れに ellipsis + tooltip を追加
- * ✅ 左右パネルの折りたたみ機能で編集領域を拡張可能
- * ✅ タイムラインの高さ調整機能
- * ✅ トラックヘッダの固定幅設定でタイムライン領域の圧迫を防止
- * ✅ レスポンシブ対応でモバイル表示も改善
- * ✅ 音声ファイル選択UIの改善
- * ✅ BPM検出結果の見やすい表示
- * ✅ エラーハンドリングとプログレス表示の改善
+ * FlickMV Editor Ultimate - 修正版
  */
 const EditorUltimate: React.FC = () => {
   const { projectId } = useParams();
+  
+  // Core state
   const [project, setProject] = useState<Project>(createEmptyProject());
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadPosition, setPlayheadPosition] = useState(0);
   const [selectedClip, setSelectedClip] = useState<TimelineClip | null>(null);
   const [zoom, setZoom] = useState(1);
+  
+  // UI state
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-  
-  // Export state
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [currentExportJob, setCurrentExportJob] = useState<ExportJob | null>(null);
   const [showExportProgress, setShowExportProgress] = useState(false);
   
-  // Panel state - 最適化されたデフォルト値
+  // Panel state
   const [leftPanelWidth, setLeftPanelWidth] = useState(320);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
@@ -395,10 +161,20 @@ const EditorUltimate: React.FC = () => {
   const [previewWindows, setPreviewWindows] = useState<string[]>([]);
   const [showPiP, setShowPiP] = useState(false);
   
+  // Audio analysis state
+  const [bpmAnalysis, setBpmAnalysis] = useState<BPMAnalysis | null>(null);
+  const [beatGrid, setBeatGrid] = useState<BeatGrid>({
+    enabled: true,
+    snapToBeat: true,
+    snapToBar: true,
+    subdivisions: 4,
+    quantizeStrength: 0.5
+  });
+  
   // Mock user data
-  const [user] = useState({
+  const user = {
     id: 'user1',
-    plan: 'free',
+    plan: 'free' as const,
     canRemoveWatermark: false,
     exportStats: {
       currentMonth: 2,
@@ -406,7 +182,7 @@ const EditorUltimate: React.FC = () => {
       limit: 5,
       remaining: 3
     }
-  });
+  };
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -415,54 +191,11 @@ const EditorUltimate: React.FC = () => {
 
   const currentVideoResolution = VIDEO_RESOLUTIONS[videoResolution];
 
-  // プレビューレンダリング用の関数
-  const renderPreviewContent = () => {
-    return (
-      <Preview
-        project={project}
-        playheadPosition={playheadPosition}
-        isPlaying={isPlaying}
-      />
-    );
-  };
-
-  // ポップアウトプレビューウィンドウ更新機能
-  const updatePreviewWindows = useCallback(() => {
-    previewWindows.forEach(windowId => {
-      const window = previewManager.getWindow(windowId);
-      if (window && !window.closed) {
-        const container = window.document.getElementById('preview-container');
-        if (container) {
-          container.innerHTML = `
-            <canvas id="preview-canvas" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
-          `;
-          
-          setTimeout(() => {
-            const canvas = window.document.getElementById('preview-canvas') as HTMLCanvasElement;
-            const mainCanvas = document.querySelector('canvas') as HTMLCanvasElement;
-            if (canvas && mainCanvas) {
-              const ctx = canvas.getContext('2d');
-              if (ctx && mainCanvas.getContext('2d')) {
-                canvas.width = mainCanvas.width;
-                canvas.height = mainCanvas.height;
-                ctx.drawImage(mainCanvas, 0, 0);
-              }
-            }
-          }, 100);
-        }
-      }
-    });
-  }, [previewWindows, playheadPosition, project]);
-
-  useEffect(() => {
-    updatePreviewWindows();
-  }, [updatePreviewWindows]);
-
-  // Tutorial steps - 修正内容を反映
+  // Tutorial steps
   const tutorialSteps = [
     {
-      title: "🎉 レイアウト問題修正完了!",
-      description: "Grid ベースの設計で、パネル幅とテキスト表示が大幅に改善されました。文字切れや重なりがなくなりました。",
+      title: "🎉 レイアウト問題修正完了",
+      description: "Grid ベースの設計で、パネル幅やテキスト表示が大幅に改善されました。文字切れや重なりがなくなりました。",
       target: "timeline-area"
     },
     {
@@ -479,121 +212,132 @@ const EditorUltimate: React.FC = () => {
 
   const currentTutorialStep = tutorialSteps[tutorialStep] ?? tutorialSteps[0];
 
-  // パネル幅の計算
+  // Helper functions
   const getLeftPanelWidth = () => isLeftPanelCollapsed ? 60 : Math.max(leftPanelWidth, 280);
   const getRightPanelWidth = () => isRightPanelCollapsed ? 60 : Math.max(rightPanelWidth, 280);
 
-  // 音楽アップロード時の時間調整機能
-  const handleAudioUpload = useCallback((audioFile: File) => {
-    const audio = new Audio();
-    const url = URL.createObjectURL(audioFile);
-    
-    audio.addEventListener('loadedmetadata', () => {
-      const audioDuration = Math.ceil(audio.duration);
-      
-      setProject(prev => ({
-        ...prev,
-        settings: {
-          ...prev.settings,
-          duration: Math.max(audioDuration, 60)
-        },
-        timeline: {
-          ...prev.timeline,
-          duration: Math.max(audioDuration, 60)
-        }
-      }));
-      
-      URL.revokeObjectURL(url);
-      
-      console.log(`音楽ファイル（${audioDuration}秒）がアップロードされました。プロジェクトの長さを調整しました。`);
-    });
-    
-    audio.src = url;
-  }, []);
+  // Event handlers
+  const handleMediaUpload = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const newMediaFiles: MediaFile[] = [];
 
-  // メディアファイル処理（強化版）
-  const handleMediaUpload = useCallback(async (mediaFiles: MediaFile[]) => {
-    setProject(prev => ({
-      ...prev,
-      mediaLibrary: [...prev.mediaLibrary, ...mediaFiles]
-    }));
-    
-    const audioFiles = mediaFiles.filter(file => file.type === 'audio');
-    if (audioFiles.length > 0) {
-      const longestDuration = Math.max(...audioFiles.map(file => file.duration || 0));
-      if (longestDuration > 0) {
-        setProject(prev => ({
-          ...prev,
-          settings: {
-            ...prev.settings,
-            duration: Math.max(Math.ceil(longestDuration), 60)
-          },
-          timeline: {
-            ...prev.timeline,
-            duration: Math.max(Math.ceil(longestDuration), 60)
-          }
-        }));
-        
-        console.log(`🎵 音声ファイルの最長時間（${longestDuration.toFixed(1)}秒）に基づいてプロジェクトの長さを調整しました。`);
+    for (const file of fileArray) {
+      const mediaFile: MediaFile = {
+        id: `media_${Date.now()}_${Math.random()}`,
+        name: file.name,
+        type: file.type.startsWith('image/') ? 'image' : 
+              file.type.startsWith('video/') ? 'video' : 
+              file.type.startsWith('audio/') ? 'audio' : 'image',
+        url: URL.createObjectURL(file),
+        thumbnail: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+        size: file.size,
+        format: file.name.split('.').pop() || '',
+        uploadedAt: new Date(),
+        originalFile: file,
+        metadata: {
+          mimeType: file.type
+        }
+      };
+      newMediaFiles.push(mediaFile);
+
+      // Handle audio duration
+      if (file.type.startsWith('audio/')) {
+        const audio = new Audio();
+        audio.addEventListener('loadedmetadata', () => {
+          const duration = Math.ceil(audio.duration);
+          setProject(prev => ({
+            ...prev,
+            settings: {
+              ...prev.settings,
+              duration: Math.max(duration, 60)
+            },
+            timeline: {
+              ...prev.timeline,
+              duration: Math.max(duration, 60)
+            },
+            mediaLibrary: prev.mediaLibrary.map(m => 
+              m.id === mediaFile.id ? { ...m, duration } : m
+            )
+          }));
+          URL.revokeObjectURL(audio.src);
+        });
+        audio.src = mediaFile.url;
       }
     }
+
+    setProject(prev => ({
+      ...prev,
+      mediaLibrary: [...prev.mediaLibrary, ...newMediaFiles]
+    }));
   }, []);
 
-  // Popup preview functions
+  const handleClipSelect = (clip: TimelineClip) => {
+    setSelectedClip(clip);
+  };
+
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
+
+  const handleTimeUpdate = useCallback((time: number) => {
+    setPlayheadPosition(time);
+    setProject(prev => ({
+      ...prev,
+      timeline: {
+        ...prev.timeline,
+        playheadPosition: time
+      }
+    }));
+  }, []);
+
+  const handleExport = () => {
+    if (user.exportStats.remaining <= 0) {
+      alert('エクスポート制限に達しました。プランをアップグレードしてください。');
+      return;
+    }
+    if (!project.timeline?.clips?.length) {
+      alert('プロジェクトにクリップがありません。メディアを追加してからエクスポートしてください。');
+      return;
+    }
+    setShowExportPanel(true);
+  };
+
+  const handleExportStart = (job: ExportJob) => {
+    setCurrentExportJob(job);
+    setShowExportProgress(true);
+    setShowExportPanel(false);
+  };
+
+  const handleExportComplete = (job: ExportJob) => {
+    console.log('Export completed:', job);
+  };
+  
+  const handleResolutionChange = (newResolution: Resolution) => {
+    setVideoResolution(newResolution);
+    setProject(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        resolution: newResolution
+      }
+    }));
+  };
+
   const createPreviewWindow = useCallback((resolution: Resolution) => {
     const resolutionData = VIDEO_RESOLUTIONS[resolution];
     const windowId = `preview_${Date.now()}`;
     
-    const newWindow = previewManager.createWindow({
-      id: windowId,
-      title: resolutionData.label,
-      width: resolutionData.windowSize.width,
-      height: resolutionData.windowSize.height,
-      resolution
-    });
-
-    if (newWindow) {
-      setPreviewWindows(prev => [...prev, windowId]);
-      
-      setTimeout(() => {
-        const window = previewManager.getWindow(windowId);
-        if (window) {
-          const container = window.document.getElementById('preview-container');
-          if (container) {
-            container.innerHTML = `
-              <canvas id="preview-canvas" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
-            `;
-            
-            const mainCanvas = document.querySelector('canvas') as HTMLCanvasElement;
-            const canvas = window.document.getElementById('preview-canvas') as HTMLCanvasElement;
-            if (canvas && mainCanvas) {
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                canvas.width = resolutionData.width;
-                canvas.height = resolutionData.height;
-                
-                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-                gradient.addColorStop(0, '#667eea');
-                gradient.addColorStop(1, '#764ba2');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                ctx.fillStyle = 'white';
-                ctx.font = '24px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('🎬 FlickMV Preview (FIXED)', canvas.width / 2, canvas.height / 2 - 20);
-                ctx.font = '16px Arial';
-                ctx.fillText(`${resolutionData.width} × ${resolutionData.height}`, canvas.width / 2, canvas.height / 2 + 20);
-              }
-            }
-          }
-        }
-      }, 100);
-    }
+    // Mock preview window creation
+    console.log(`Creating preview window for ${resolution}:`, resolutionData);
+    setPreviewWindows(prev => [...prev, windowId]);
+    
+    // Simulate window cleanup after 30 seconds
+    setTimeout(() => {
+      setPreviewWindows(prev => prev.filter(id => id !== windowId));
+    }, 30000);
   }, []);
 
   const closePreviewWindow = useCallback((windowId: string) => {
-    previewManager.closeWindow(windowId);
     setPreviewWindows(prev => prev.filter(id => id !== windowId));
   }, []);
 
@@ -603,10 +347,7 @@ const EditorUltimate: React.FC = () => {
         await document.exitPictureInPicture();
         setShowPiP(false);
       } else {
-        const video = document.createElement('video');
-        video.src = 'data:video/mp4;base64,';
-        video.muted = true;
-        await video.requestPictureInPicture();
+        // Mock PiP functionality
         setShowPiP(true);
       }
     } catch (error) {
@@ -654,6 +395,22 @@ const EditorUltimate: React.FC = () => {
     setIsResizingTimeline(false);
   }, []);
 
+  // Tutorial functions
+  const nextTutorialStep = () => {
+    if (tutorialStep < tutorialSteps.length - 1) {
+      setTutorialStep(tutorialStep + 1);
+    } else {
+      setShowTutorial(false);
+      setTutorialStep(0);
+    }
+  };
+
+  const skipTutorial = () => {
+    setShowTutorial(false);
+    setTutorialStep(0);
+  };
+
+  // Effects
   useEffect(() => {
     if (isResizing || isResizingTimeline) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -670,129 +427,6 @@ const EditorUltimate: React.FC = () => {
     }
   }, [isResizing, isResizingTimeline, handleMouseMove, handleMouseUp]);
 
-  // Other handlers
-  const handleMediaUploadOld = (files: FileList) => {
-    const newItems: MediaFile[] = [];
-    Array.from(files).forEach((file, idx) => {
-      const url = URL.createObjectURL(file);
-      const mime = file.type || '';
-      const topLevel = mime.split('/')[0] as 'image' | 'video' | 'audio' | string;
-      const type: 'image' | 'video' | 'audio' = (topLevel === 'image' || topLevel === 'video' || topLevel === 'audio') ? topLevel : 'image';
-      const format = file.name.includes('.') ? (file.name.split('.').pop() || '').toLowerCase() : (mime.split('/')[1] || '');
-      const item: MediaFile = {
-        id: `media_${Date.now()}_${idx}`,
-        name: file.name,
-        type,
-        url,
-        thumbnail: type === 'image' ? url : undefined,
-        size: file.size,
-        width: undefined,
-        height: undefined,
-        duration: undefined,
-        format: format || mime,
-        uploadedAt: new Date(),
-        originalFile: file,
-        metadata: {
-          mimeType: mime
-        }
-      };
-      newItems.push(item);
-
-      if (type === 'audio') {
-        handleAudioUpload(file);
-        const audioEl = new Audio();
-        audioEl.addEventListener('loadedmetadata', () => {
-          const dur = Math.ceil(audioEl.duration || 0);
-          setProject(prev => ({
-            ...prev,
-            mediaLibrary: prev.mediaLibrary.map(m => m.id === item.id ? { ...m, duration: dur } : m)
-          }));
-          URL.revokeObjectURL(audioEl.src);
-        });
-        audioEl.src = url;
-      }
-    });
-
-    setProject(prev => ({
-      ...prev,
-      mediaLibrary: [...prev.mediaLibrary, ...newItems]
-    }));
-  };
-
-  const handleClipSelect = (clip: TimelineClip) => {
-    setSelectedClip(clip);
-  };
-
-  const handlePlayPause = useCallback(() => {
-    console.log('🎬 再生/一時停止状態変更:', isPlaying ? '一時停止中' : '再生中');
-    setIsPlaying(prev => {
-      const newState = !prev;
-      console.log('🔄 新しい再生状態:', newState);
-      return newState;
-    });
-  }, [isPlaying]);
-
-  const handleTimeUpdate = useCallback((time: number) => {
-    console.log('⏱️ 時間更新:', time.toFixed(2), '秒');
-    setPlayheadPosition(time);
-    
-    setProject(prev => ({
-      ...prev,
-      timeline: {
-        ...prev.timeline,
-        playheadPosition: time
-      }
-    }));
-  }, []);
-
-  const handleExport = () => {
-    if (user.exportStats.remaining <= 0) {
-      alert('エクスポート制限に達しました。プランをアップグレードしてください。');
-      return;
-    }
-    if (!project.timeline?.clips?.length) {
-      alert('プロジェクトにクリップがありません。メディアを追加してからエクスポートしてください。');
-      return;
-    }
-    setShowExportPanel(true);
-  };
-
-  const handleExportStart = (job: ExportJob) => {
-    setCurrentExportJob(job);
-    setShowExportProgress(true);
-    setShowExportPanel(false);
-  };
-
-  const handleExportComplete = (job: ExportJob) => {
-    console.log('Export completed:', job);
-  };
-  
-  const handleResolutionChange = (newResolution: Resolution) => {
-    setVideoResolution(newResolution);
-    setProject(prev => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        resolution: newResolution
-      }
-    }));
-  };
-
-  const nextTutorialStep = () => {
-    if (tutorialStep < tutorialSteps.length - 1) {
-      setTutorialStep(tutorialStep + 1);
-    } else {
-      setShowTutorial(false);
-      setTutorialStep(0);
-    }
-  };
-
-  const skipTutorial = () => {
-    setShowTutorial(false);
-    setTutorialStep(0);
-  };
-
-  // Initialize
   useEffect(() => {
     const freshProject = createEmptyProject();
     setProject(freshProject);
@@ -807,15 +441,20 @@ const EditorUltimate: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      previewManager.closeAllWindows();
-    };
-  }, []);
+  // Render preview content
+  const renderPreviewContent = () => {
+    return (
+      <Preview
+        project={project}
+        playheadPosition={playheadPosition}
+        isPlaying={isPlaying}
+      />
+    );
+  };
 
   return (
     <div className="h-screen flex flex-col bg-dark-900 text-white overflow-hidden">
-      {/* 修正完了インジケーター */}
+      {/* Status Indicator */}
       <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-3 py-2 rounded-lg shadow-lg flex items-center space-x-2">
         <CheckCircle className="w-4 h-4" />
         <span className="text-sm font-medium">レイアウト修正完了</span>
@@ -878,12 +517,14 @@ const EditorUltimate: React.FC = () => {
       </AnimatePresence>
 
       {/* Export Panel */}
-      <ExportPanel
-        project={project}
-        isOpen={showExportPanel}
-        onClose={() => setShowExportPanel(false)}
-        onExportStart={handleExportStart}
-      />
+      {showExportPanel && (
+        <ExportPanel
+          project={project}
+          isOpen={showExportPanel}
+          onClose={() => setShowExportPanel(false)}
+          onExportStart={handleExportStart}
+        />
+      )}
 
       {/* Export Progress */}
       {currentExportJob && (
@@ -895,7 +536,7 @@ const EditorUltimate: React.FC = () => {
         />
       )}
 
-      {/* Header - 改良版 */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -909,7 +550,7 @@ const EditorUltimate: React.FC = () => {
                 {project.name} (修正版)
               </h1>
               <div className="flex items-center space-x-2 text-xs text-gray-400">
-                <CheckCircle className="w-2 h-2 text-green-400" />
+                <CheckCircle className="w-3 h-3 text-green-400" />
                 <span>レイアウト修正完了</span>
               </div>
             </div>
@@ -954,7 +595,7 @@ const EditorUltimate: React.FC = () => {
         }}
         ref={containerRef}
       >
-        {/* Left Panel - Fixed */}
+        {/* Left Panel */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -965,7 +606,7 @@ const EditorUltimate: React.FC = () => {
           <button
             onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
             className="absolute top-4 right-2 z-10 w-8 h-8 bg-dark-700 hover:bg-dark-600 rounded-lg flex items-center justify-center transition-all"
-            title={isLeftPanelCollapsed ? 'パネルを展開' : 'パネルを折りたたむ'}
+            title={isLeftPanelCollapsed ? 'パネルを展開' : 'パネルを折りたたみ'}
           >
             {isLeftPanelCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
@@ -975,8 +616,8 @@ const EditorUltimate: React.FC = () => {
               <div className="p-4 border-b border-dark-700 flex-shrink-0">
                 <div className="flex items-center space-x-2">
                   <Image className="w-4 h-4 text-green-400" />
-                  <span className="text-sm font-medium text-green-400 truncate" title="メディアライブラリ（修正版）">
-                    メディアライブラリ（修正版）
+                  <span className="text-sm font-medium text-green-400 truncate">
+                    メディアライブラリ (修正版)
                   </span>
                 </div>
               </div>
@@ -997,22 +638,40 @@ const EditorUltimate: React.FC = () => {
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
-                      handleMediaUploadOld(e.target.files);
+                      handleMediaUpload(e.target.files);
                       e.currentTarget.value = '';
                     }
                   }}
                 />
                 
-                <MediaLibraryFixed
-                  mediaFiles={project.mediaLibrary}
-                  onUpload={handleMediaUpload}
-                />
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {project.mediaLibrary.map((media) => (
+                    <div key={media.id} className="bg-dark-700 p-3 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        {media.type === 'image' ? (
+                          <Image className="w-5 h-5 text-blue-400" />
+                        ) : media.type === 'video' ? (
+                          <Video className="w-5 h-5 text-purple-400" />
+                        ) : (
+                          <Music className="w-5 h-5 text-green-400" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{media.name}</p>
+                          <p className="text-xs text-gray-400">
+                            {(media.size / 1024 / 1024).toFixed(1)} MB
+                            {media.duration && ` • ${media.duration.toFixed(1)}s`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 
                 {project.mediaLibrary.length === 0 && (
                   <div className="text-center py-8">
                     <Image className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                     <p className="text-gray-400 text-sm">メディアファイルがありません</p>
-                    <p className="text-green-400 text-xs mt-1">✅ 音楽をアップロードすると時間が自動調整されます</p>
+                    <p className="text-green-400 text-xs mt-1">音楽をアップロードすると時間が自動調整されます</p>
                   </div>
                 )}
               </div>
@@ -1065,13 +724,13 @@ const EditorUltimate: React.FC = () => {
                 <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               </div>
             </div>
-            <div className="text-xs text-gray-400 truncate ml-4" title={`現在: ${currentVideoResolution.width}×${currentVideoResolution.height}`}>
+            <div className="text-xs text-gray-400 truncate ml-4">
               現在: {currentVideoResolution.width}×{currentVideoResolution.height}
             </div>
           </div>
         </div>
         
-        {/* Mini Preview Area - Fixed */}
+        {/* Mini Preview Area */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1106,32 +765,13 @@ const EditorUltimate: React.FC = () => {
               </button>
             </div>
 
-            {/* Quick Resolution Buttons */}
-            <div className="absolute top-6 left-6 flex gap-1">
-              {Object.entries(VIDEO_RESOLUTIONS)
-                .filter(([key]) => ['9:16', '16:9', '1:1'].includes(key))
-                .map(([resolution, resData]) => {
-                const Icon = resData.icon;
-                return (
-                  <button
-                    key={resolution}
-                    onClick={() => createPreviewWindow(resolution as Resolution)}
-                    className="bg-dark-700/90 hover:bg-dark-600 backdrop-blur-sm border border-dark-600 p-2 rounded text-xs transition-all"
-                    title={`${resData.label}でプレビューを開く`}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </button>
-                );
-              })}
-            </div>
-
             {/* Preview Status */}
             <div className="absolute bottom-6 left-6 bg-black/70 rounded-lg px-3 py-2 text-sm text-white">
               <div className="flex items-center space-x-4 text-xs">
                 <span className="truncate">プレビュー品質: リアルタイム</span>
                 <span className="truncate">解像度: {currentVideoResolution.width}×{currentVideoResolution.height}</span>
                 {project.timeline.clips.length > 0 && (
-                  <span className="text-green-400 truncate">✓ {project.timeline.clips.length}クリップ</span>
+                  <span className="text-green-400 truncate">{project.timeline.clips.length}クリップ</span>
                 )}
               </div>
             </div>
@@ -1173,7 +813,7 @@ const EditorUltimate: React.FC = () => {
           />
         </motion.div>
 
-        {/* Timeline Area - Fixed */}
+        {/* Timeline Area */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1200,7 +840,7 @@ const EditorUltimate: React.FC = () => {
               <div className="flex items-center gap-4">
                 <h3 className="text-sm font-medium flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="truncate">タイムライン（修正版） - Sticky Ruler対応</span>
+                  <span className="truncate">タイムライン (修正版) - Sticky Ruler対応</span>
                 </h3>
               </div>
               <div className="text-xs text-gray-400 truncate ml-4">
@@ -1210,7 +850,7 @@ const EditorUltimate: React.FC = () => {
           </div>
           
           <div className="h-full overflow-hidden">
-            <TimelineFixed
+            <BeatTimeline
               timeline={project.timeline}
               playheadPosition={playheadPosition}
               zoom={zoom}
@@ -1218,11 +858,17 @@ const EditorUltimate: React.FC = () => {
               onTimelineUpdate={(timeline) => 
                 setProject(prev => ({ ...prev, timeline }))
               }
+              onPlayheadChange={handleTimeUpdate}
+              bpmAnalysis={bpmAnalysis}
+              beatGrid={beatGrid}
+              onBeatGridChange={setBeatGrid}
+              showBeatMarkers={true}
+              showBarMarkers={true}
             />
           </div>
         </motion.div>
 
-        {/* Right Panel - Fixed */}
+        {/* Right Panel */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1233,7 +879,7 @@ const EditorUltimate: React.FC = () => {
           <button
             onClick={() => setIsRightPanelCollapsed(!isRightPanelCollapsed)}
             className="absolute top-4 left-2 z-10 w-8 h-8 bg-dark-700 hover:bg-dark-600 rounded-lg flex items-center justify-center transition-all"
-            title={isRightPanelCollapsed ? 'パネルを展開' : 'パネルを折りたたむ'}
+            title={isRightPanelCollapsed ? 'パネルを展開' : 'パネルを折りたたみ'}
           >
             {isRightPanelCollapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
@@ -1250,32 +896,100 @@ const EditorUltimate: React.FC = () => {
           )}
 
           {!isRightPanelCollapsed && (
-            <RightPanelFixed
-              project={project}
-              selectedClip={selectedClip}
-              videoResolution={videoResolution}
-              previewWindows={previewWindows}
-              onResolutionChange={handleResolutionChange}
-              onCreatePreviewWindow={createPreviewWindow}
-              onClosePreviewWindow={closePreviewWindow}
-              onProjectUpdate={setProject}
-              onApplyPreset={(clip) => {
-                setProject(prev => ({
-                  ...prev,
-                  timeline: {
-                    ...prev.timeline,
-                    clips: prev.timeline.clips.map(c => 
-                      c.id === clip.id ? clip : c
-                    )
-                  }
-                }));
-                setSelectedClip(clip);
-                console.log('✨ エフェクトプリセット適用:', clip.id);
-              }}
-              onPreviewPreset={(preset) => {
-                console.log('👁️ プリセットプレビュー:', preset.name);
-              }}
-            />
+            <div className="flex-1 overflow-hidden p-4">
+              <div className="flex items-center space-x-2 mb-4">
+                <Settings className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-medium text-green-400">
+                  プロパティ (修正版)
+                </span>
+              </div>
+
+              {selectedClip ? (
+                <div className="space-y-4">
+                  <div className="bg-dark-700 p-3 rounded-lg">
+                    <h4 className="text-sm font-medium text-white mb-2">選択中のクリップ</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">ID:</span>
+                        <span className="text-white truncate">{selectedClip.id}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">開始時間:</span>
+                        <span className="text-white">{selectedClip.startTime.toFixed(1)}s</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">長さ:</span>
+                        <span className="text-white">{selectedClip.duration.toFixed(1)}s</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-dark-700 p-3 rounded-lg">
+                    <h4 className="text-sm font-medium text-white mb-2">プロパティ</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">不透明度</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          defaultValue="1"
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">音量</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          defaultValue="1"
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Settings className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm">クリップを選択してください</p>
+                  <p className="text-green-400 text-xs mt-1">プロパティを編集できます</p>
+                </div>
+              )}
+
+              {/* Export Section */}
+              <div className="mt-6 pt-4 border-t border-dark-700">
+                <h4 className="text-sm font-medium text-white mb-3">エクスポート設定</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">品質</label>
+                    <select className="w-full bg-dark-600 border border-dark-500 rounded px-2 py-1 text-sm">
+                      <option>高品質</option>
+                      <option>中品質</option>
+                      <option>低品質</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">フォーマット</label>
+                    <select className="w-full bg-dark-600 border border-dark-500 rounded px-2 py-1 text-sm">
+                      <option>MP4</option>
+                      <option>MOV</option>
+                      <option>AVI</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleExport}
+                    className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>エクスポート開始</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Collapsed state */}
@@ -1285,14 +999,14 @@ const EditorUltimate: React.FC = () => {
               <div className="text-xs text-center text-gray-400 px-2">
                 <div>コントロール</div>
                 <div>パネル</div>
-                <div className="text-green-400 text-xs">（修正版）</div>
+                <div className="text-green-400 text-xs">(修正版)</div>
               </div>
             </div>
           )}
         </motion.div>
       </div>
 
-      {/* Status Bar - Fixed */}
+      {/* Status Bar */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

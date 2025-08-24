@@ -116,7 +116,7 @@ export class BPMDetector {
       }
     }
     
-    // 近接ビートの統合（最小間隔: 0.1秒）
+    // 近接ビートの統合（最小間隔 0.1秒）
     return this.mergeCloseBeats(beats, 0.1);
   }
 

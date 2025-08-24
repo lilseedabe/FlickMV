@@ -10,6 +10,7 @@ import PlaybackControls from '../components/editor/PlaybackControls';
 
 
 
+
 import RightPanel from '../components/panels/RightPanel';
 import { ExportPanel, ExportProgress } from '../components/export';
 
@@ -979,7 +980,7 @@ const Editor: React.FC = () => {
               <div className="flex-1 overflow-hidden p-4">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 mb-4"
+                  className="w-full bg-purple-500 hover:bg-purple-600 text白 py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 mb-4"
                 >
                   <Upload className="w-5 h-5" />
                   <span>ファイルをアップロード</span>
@@ -1017,7 +1018,7 @@ const Editor: React.FC = () => {
 
           {!isLeftPanelCollapsed && (
             <div
-              className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-purple-500/50 transition-colors group"
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg透明 hover:bg-purple-500/50 transition-colors group"
               onMouseDown={handleMouseDown('left')}
             >
               <div className="absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1111,7 +1112,7 @@ const Editor: React.FC = () => {
               </div>
 
               {/* Preview Status */}
-              <div className="absolute bottom-6 left-6 bg-black/70 rounded-lg px-3 py-2 text-sm text-white">
+              <div className="absolute bottom-6 left-6 bg-black/70 rounded-lg px-3 py-2 text-sm text白">
                 <div className="flex items-center space-x-4">
                   <span>プレビュー品質: リアルタイム</span>
                   <span>解像度: {currentVideoResolution.width}×{currentVideoResolution.height}</span>
@@ -1123,7 +1124,7 @@ const Editor: React.FC = () => {
 
               {/* Preview Windows Status */}
               {previewWindows.length > 0 && (
-                <div className="absolute bottom-6 right-6 bg-green-500/90 backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm">
+                <div className="absolute bottom-6 right-6 bg-green-500/90 backdrop-blur-sm text白 px-3 py-2 rounded-lg text-sm">
                   {previewWindows.length} 個のプレビューが開いています
                 </div>
               )}
@@ -1167,7 +1168,7 @@ const Editor: React.FC = () => {
             ref={timelineRef}
           >
             <div
-              className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize bg-transparent hover:bg-purple-500/50 transition-colors group"
+              className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize bg透明 hover:bg-purple-500/50 transition-colors group"
               onMouseDown={handleTimelineResizeStart}
             >
               <div className="absolute left-1/2 top-0 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1179,7 +1180,7 @@ const Editor: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <h3 className="text-sm font-medium flex items-center gap-2">
-                    <Video className="w-4 h-4 text-purple-400" />
+                    <Video className="w-4 h-4 text紫色-400" />
                     タイムライン - 高さ調整可能
                   </h3>
 
@@ -1223,7 +1224,7 @@ const Editor: React.FC = () => {
 
           {!isRightPanelCollapsed && (
             <div
-              className="absolute top-0 left-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-purple-500/50 transition-colors group"
+              className="absolute top-0 left-0 w-1 h-full cursor-col-resize bg透明 hover:bg-purple-500/50 transition-colors group"
               onMouseDown={handleMouseDown('right')}
             >
               <div className="absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">

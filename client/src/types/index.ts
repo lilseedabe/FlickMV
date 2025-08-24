@@ -65,7 +65,6 @@ export interface MediaFile {
     frameRate?: number;
     [key: string]: any;
   };
-  // 元のFileオブジェクトを保持（BPM検出などで使用）
   originalFile?: File;
 }
 
@@ -108,7 +107,7 @@ export interface TimelineClip {
 
 export interface AudioTrack {
   id: string;
-  // メディア管理ID（未連携の場合もあるため任意）
+  // メディア管理と未連携の場合もあるため任意
   mediaId?: string;
   // 表示/識別用
   name?: string;
@@ -124,7 +123,6 @@ export interface AudioTrack {
   bars?: number[]; // bar start timestamps
   confidence?: number; // BPM検出の信頼度 (0-1)
   analyzedAt?: string;
-  // 元のFileオブジェクト（BPM検出・波形生成で使用）
   originalFile?: File;
 }
 
@@ -465,13 +463,12 @@ export interface Analytics {
   }>;
 }
 
-// ===== EXPORT CONSTANTS =====
 // ===== BPM & AUDIO ANALYSIS TYPES =====
 export interface BPMAnalysis {
   bpm: number;
   confidence: number;
-  beatTimes: number[]; // 各ビートのタイムスタンプ（秒）
-  bars: number[]; // 小節の開始タイムスタンプ
+  beatTimes: number[]; // 拍のタイムスタンプ（秒）
+  bars: number[]; // 小節の開始タイムスタンプ（秒）
   timeSignature: {
     numerator: number; // 4/4 の 4
     denominator: number; // 4/4 の 4
@@ -490,8 +487,8 @@ export interface AudioAnalysis {
   frequencyBands: FrequencyBand[];
   rms: number; // 音量レベル
   peak: number; // ピーク音量
-  spectralCentroid: number; // 音の明るさ
-  zcr: number; // Zero Crossing Rate
+  spectralCentroid?: number; // スペクトル重心（任意）
+  zcr?: number; // ゼロクロッシング率（任意）
 }
 
 // ===== BEAT SNAP & GRID TYPES =====
@@ -565,7 +562,7 @@ export interface FrequencyTrigger {
   enabled: boolean;
   sensitivity: number; // 0-1
   duration: number; // エフェクト持続時間（秒）
-  cooldown: number; // 再トリガーまでの待機時間（秒）
+  cooldown: number; // 再トリガーまでの最小時間（秒）
 }
 
 export interface FrequencyEffect {
@@ -653,7 +650,7 @@ export interface ProjectEnhanced extends Project {
     enabled: boolean;
     realTimeMode: boolean;
     triggers: FrequencyTrigger[];
-    history: AudioAnalysis[]; // 分析履歴
+    history: AudioAnalysis[]; // 過去履歴
   };
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import './styles/globals.css';
 
 // Context Providers
@@ -40,7 +40,7 @@ const queryClient = new QueryClient({
         return failureCount < 3;
       },
       staleTime: 5 * 60 * 1000, // 5分
-      cacheTime: 10 * 60 * 1000, // 10分
+      gcTime: 10 * 60 * 1000, // 10分
     },
     mutations: {
       retry: false,

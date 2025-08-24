@@ -1,4 +1,4 @@
-// タイムライン関連の共通フック
+// タイムライン関連の共通フチE��
 export { useTimelineScale, type TimelineScale, type TimelineScaleConfig } from './useTimelineScale';
 export { useTimelineSnap, type SnapConfig, type SnapResult } from './useTimelineSnap';
 export { useTimelineDrag, type DragConfig, type DragState } from './useTimelineDrag';

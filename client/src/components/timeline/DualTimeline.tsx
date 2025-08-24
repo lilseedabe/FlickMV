@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion';
 import { ZoomIn, ZoomOut, Move, Eye } from 'lucide-react';
 import type { Timeline, TimelineClip, AudioTrack } from '@/types';
-import { useTimelineScale, useTimelineDrag } from '../../hooks/timeline';
+import useTimelineScale from '../../hooks/timeline/useTimelineScale';
+import useTimelineDrag from '../../hooks/timeline/useTimelineDrag';
 
 export interface DualTimelineProps {
   /** タイムライン全体 */
@@ -36,7 +37,7 @@ interface ViewportWindow {
 
 /**
  * デュアルタイムライン - ミニマップ + 詳細編集
- * 長尺コンテンツでのナビゲーションを劇的に改善
+ * 長尺コンテンツのナビゲーションを劇的に改善
  */
 const DualTimeline: React.FC<DualTimelineProps> = ({
   timeline,
@@ -63,11 +64,10 @@ const DualTimeline: React.FC<DualTimelineProps> = ({
   const minimapAudioHeight = 12;
   const minimapWidth = 800;
 
-  // ミニマップ用スケール（全体を表示）
-  const { pixelsPerSecond: minimapPixelsPerSecond, timeToPixel: minimapTimeToPixel } = useTimelineScale({
-    zoom: minimapWidth / timeline.duration / 50, // 全体が収まるズーム
-    basePixelsPerSecond: 50
-  });
+  // ミニマップ用スケール: 全体を表示
+  const basePixelsPerSecond = 50;
+  const minimapPixelsPerSecond = minimapWidth / timeline.duration;
+  const minimapTimeToPixel = useCallback((time: number) => time * minimapPixelsPerSecond, [minimapPixelsPerSecond]);
 
   // ビューポートウィンドウの計算
   const viewportWindow: ViewportWindow = useMemo(() => {
@@ -85,30 +85,47 @@ const DualTimeline: React.FC<DualTimelineProps> = ({
   }, [viewportStartTime, viewportDuration, timeline.duration, minimapTimeToPixel]);
 
   // ビューポートドラッグ処理
-  const {
-    registerElement: registerViewportDrag
-  } = useTimelineDrag({
-    enabled: true,
-    throttle: true,
-    onDragStart: () => {
-      setIsDraggingViewport(true);
-    },
-    onDragMove: (e, deltaX) => {
-      if (!minimapRef.current) return;
+  const registerViewportDrag = useCallback((element: HTMLElement) => {
+    let isDragging = false;
+    let startX = 0;
+    let startPixelStart = 0;
 
-      const rect = minimapRef.current.getBoundingClientRect();
-      const newPixelStart = Math.max(0, Math.min(
-        minimapWidth - viewportWindow.pixelWidth,
-        viewportWindow.pixelStart + deltaX
-      ));
+    const handlePointerDown = (e: PointerEvent) => {
+      isDragging = true;
+      startX = e.clientX;
+      startPixelStart = viewportWindow.pixelStart;
+      setIsDraggingViewport(true);
       
-      const newStartTime = newPixelStart / minimapPixelsPerSecond;
-      onViewportChange?.(newStartTime, viewportWindow.duration);
-    },
-    onDragEnd: () => {
-      setIsDraggingViewport(false);
-    }
-  });
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        if (!isDragging || !minimapRef.current) return;
+
+        const deltaX = moveEvent.clientX - startX;
+        const newPixelStart = Math.max(0, Math.min(
+          minimapWidth - viewportWindow.pixelWidth,
+          startPixelStart + deltaX
+        ));
+        
+        const newStartTime = newPixelStart / minimapPixelsPerSecond;
+        onViewportChange?.(newStartTime, viewportWindow.duration);
+      };
+
+      const handlePointerUp = () => {
+        isDragging = false;
+        setIsDraggingViewport(false);
+        document.removeEventListener('pointermove', handlePointerMove);
+        document.removeEventListener('pointerup', handlePointerUp);
+      };
+
+      document.addEventListener('pointermove', handlePointerMove);
+      document.addEventListener('pointerup', handlePointerUp);
+    };
+
+    element.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      element.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [viewportWindow, minimapPixelsPerSecond, onViewportChange]);
 
   // ミニマップクリック処理
   const handleMinimapClick = useCallback((e: React.MouseEvent) => {
@@ -208,14 +225,15 @@ const DualTimeline: React.FC<DualTimelineProps> = ({
   // ビューポート要素の登録
   useEffect(() => {
     if (viewportRef.current) {
-      registerViewportDrag(viewportRef.current);
+      const cleanup = registerViewportDrag(viewportRef.current);
+      return cleanup;
     }
   }, [registerViewportDrag]);
 
   return (
-    <div className={`dual-timeline bg-dark-900 border border-dark-700 rounded-lg ${className}`}>
+    <div className={`dual-timeline bg-gray-900 border border-gray-700 rounded-lg ${className}`}>
       {/* ヘッダー */}
-      <div className="flex items-center justify-between p-3 border-b border-dark-700">
+      <div className="flex items-center justify-between p-3 border-b border-gray-700">
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1">
             <Eye className="w-4 h-4 text-purple-400" />
@@ -266,12 +284,12 @@ const DualTimeline: React.FC<DualTimelineProps> = ({
       <div className="p-3">
         <div
           ref={minimapRef}
-          className="relative bg-dark-850 border border-dark-600 rounded cursor-pointer"
+          className="relative bg-gray-850 border border-gray-600 rounded cursor-pointer"
           style={{ width: minimapWidth, height: minimapHeight }}
           onClick={handleMinimapClick}
         >
           {/* 時間軸 */}
-          <div className="absolute top-0 left-0 right-0 h-6 bg-dark-800 border-b border-dark-600 flex items-center">
+          <div className="absolute top-0 left-0 right-0 h-6 bg-gray-800 border-b border-gray-600 flex items-center">
             {Array.from({ length: Math.ceil(timeline.duration / 10) + 1 }, (_, i) => i * 10).map(time => (
               <div
                 key={time}
@@ -349,7 +367,7 @@ const DualTimeline: React.FC<DualTimelineProps> = ({
             style={{
               left: viewportWindow.pixelStart,
               width: viewportWindow.pixelWidth,
-              height: minimapHeight - 24 // 時間軸分を除外
+              height: minimapHeight - 24 // 時間軸分を除く
             }}
             animate={{
               left: viewportWindow.pixelStart,

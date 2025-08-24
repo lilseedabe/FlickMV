@@ -187,7 +187,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({
                 prev.map(job => job.id === updatedJob.id ? updatedJob : job)
               );
               
-              // 完了または失敗したら更新を停止
+              // 完了したら失敗したら更新を停止
               if (['completed', 'failed', 'cancelled'].includes(updatedJob.status)) {
                 clearInterval(interval);
               }
@@ -198,7 +198,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({
           }
         }, 2000);
         
-        // 10分後にタイムアウト
+        // 10分にタイムアウト
         setTimeout(() => clearInterval(interval), 600000);
         
       } else {

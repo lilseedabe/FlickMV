@@ -365,7 +365,7 @@ const EditorFixed: React.FC = () => {
   const [currentExportJob, setCurrentExportJob] = useState<ExportJob | null>(null);
   const [showExportProgress, setShowExportProgress] = useState(false);
   
-  // Panel state - 修正版: より良いデフォルト値と制御
+  // Panel state - 修正版：より良いデフォルト値と制御
   const [leftPanelWidth, setLeftPanelWidth] = useState(320);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
@@ -380,9 +380,9 @@ const EditorFixed: React.FC = () => {
   const [videoResolution, setVideoResolution] = useState<Resolution>('9:16');
   const [previewWindows, setPreviewWindows] = useState<string[]>([]);
   const [showPiP, setShowPiP] = useState(false);
-  
+
   // Mock user data
-  const [user] = useState({
+  const user = {
     id: 'user1',
     plan: 'free',
     canRemoveWatermark: false,
@@ -392,7 +392,7 @@ const EditorFixed: React.FC = () => {
       limit: 5,
       remaining: 3
     }
-  });
+  };
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -447,8 +447,8 @@ const EditorFixed: React.FC = () => {
   // Tutorial steps
   const tutorialSteps = [
     {
-      title: "レイアウト改善完了",
-      description: "Grid ベースの設計で、パネル幅とテキスト表示が改善されました",
+      title: "レイアウト改良完了",
+      description: "Grid ベースの設計で、パネル幅・リスト表示が改良されました",
       target: "timeline-area"
     },
     {
@@ -457,15 +457,15 @@ const EditorFixed: React.FC = () => {
       target: "mini-preview"
     },
     {
-      title: "改善されたタイムライン",
-      description: "固定ルーラーと改善されたトラック管理で快適な編集が可能です",
+      title: "改良されたタイムライン",
+      description: "固定ルーラーと改良されたトラック管理で快適な編集が可能です",
       target: "timeline-area"
     }
   ];
 
   const currentTutorialStep = tutorialSteps[tutorialStep] ?? tutorialSteps[0];
 
-  // パネル幅の計算（改良版 - より良い最小幅制御）
+  // パネル幅計算（改良版 - より良い最小幅制御）
   const getLeftPanelWidth = () => isLeftPanelCollapsed ? 60 : Math.max(leftPanelWidth, 280);
   const getRightPanelWidth = () => isRightPanelCollapsed ? 60 : Math.max(rightPanelWidth, 280);
 
@@ -491,13 +491,13 @@ const EditorFixed: React.FC = () => {
       
       URL.revokeObjectURL(url);
       
-      console.log(`音楽ファイル（${audioDuration}秒）がアップロードされました。プロジェクトの長さを調整しました。`);
+      console.log(`音楽ファイル（${audioDuration}秒）がアップロードされました。プロジェクト長さを調整しました。`);
     });
     
     audio.src = url;
   }, []);
 
-  // メディアファイル処理（強化版）
+  // メディアファイル処理：強化版
   const handleMediaUpload = useCallback(async (mediaFiles: MediaFile[]) => {
     setProject(prev => ({
       ...prev,
@@ -520,7 +520,7 @@ const EditorFixed: React.FC = () => {
           }
         }));
         
-        console.log(`🎵 音声ファイルの最長時間（${longestDuration.toFixed(1)}秒）に基づいてプロジェクトの長さを調整しました。`);
+        console.log(`🎵 音声ファイルの最長時間（${longestDuration.toFixed(1)}秒）に基づいてプロジェクト長さを調整しました。`);
       }
     }
   }, []);
