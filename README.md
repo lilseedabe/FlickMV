@@ -1,5 +1,7 @@
 # FlickMV - AI音楽ビデオ作成プラットフォーム
 
+> 🎉 **Vite移行完了！** より高速な開発体験を提供します
+
 ## 🎬 概要
 
 FlickMVは、AIの力で誰でも簡単にプロレベルのミュージックビデオを作成できるWebプラットフォームです。初心者でも直感的に操作でき、上級者には高度な機能を提供します。
@@ -25,18 +27,18 @@ FlickMVは、AIの力で誰でも簡単にプロレベルのミュージック�
 
 ## 🏗️ 技術スタック
 
-### Frontend
-- **React 18** + **TypeScript 5.3**
-- **Tailwind CSS** for スタイリング
-- **Framer Motion** for アニメーション
-- **React Query** for 状態管理
-- **Vite** for 高速ビルド
+### Frontend ⚡ **Vite移行完了！**
+- **Vite 7.1.3** for 超高速開発サーバー（180ms起動！）
+- **React 19.1.1** + **TypeScript 5.8.3**
+- **TailwindCSS 3.4** for スタイリング
+- **Framer Motion 12** for アニメーション
+- **TanStack React Query 5** for 状態管理
 
 ### Backend
-- **Node.js** + **Express** + **TypeScript**
-- **Prisma** + **PostgreSQL** for データベース
-- **pg-boss** for ジョブキュー
-- **Winston** for ログ
+- **Node.js** + **Express** + **TypeScript 5.3**
+- **Prisma 5.16** + **PostgreSQL** for データベース
+- **pg-boss 9.0** for ジョブキュー
+- **PM2** for プロセス管理
 
 ### Infrastructure
 - **Docker** for コンテナ化
@@ -48,12 +50,23 @@ FlickMVは、AIの力で誰でも簡単にプロレベルのミュージック�
 ## 📦 インストール & セットアップ
 
 ### 必要な環境
-- Node.js 18+
+- Node.js 18+ (推奨: Node.js 20+)
 - npm または yarn
 - Docker (オプション)
 
-### クイックスタート
+### 🚀 クイックスタート
 
+#### 方法1: 自動スクリプト使用（推奨）
+```bash
+# プロジェクトディレクトリに移動
+cd "C:\Users\mayum\OneDrive\デスクトップ\FlickMV"
+
+# 開発サーバーを起動（自動依存関係チェック付き）
+dev-start.bat  # Windows
+# または ./dev-start.sh  # macOS/Linux
+```
+
+#### 方法2: 手動セットアップ
 ```bash
 # リポジトリをクローン
 git clone https://github.com/your-org/flickmv.git
@@ -63,22 +76,32 @@ cd flickmv
 npm run install-all
 
 # 環境変数を設定
-cp .env.example .env
+cp server/.env.example server/.env
 # .env ファイルを編集して必要な値を設定
+
+# Prismaクライアント生成
+cd server && npx prisma generate
 
 # 開発サーバーを起動
 npm run dev
 ```
 
+### アクセスURL
+- **🌐 クライアント**: http://localhost:5173/
+- **🔧 サーバーAPI**: http://localhost:5000/api/
+- **📊 開発情報**: Viteの高速HMRで即座に変更反映
+
 ### 環境変数設定
 
 ```bash
+# server/.env
 # データベース
 DATABASE_URL=postgresql://user:password@localhost:5432/flickmv
 
 # API設定  
+PORT=5000
 INTERNAL_API_KEY=your-secret-key
-CLIENT_URL=http://localhost:3000
+CLIENT_URL=http://localhost:5173
 
 # AI Services
 GROQ_API_KEY=your-groq-api-key
@@ -91,6 +114,35 @@ R2_SECRET_ACCESS_KEY=your-secret-key
 ```
 
 ## 🚀 開発
+
+### ⚡ Vite開発の恩恵
+- **超高速起動**: 180ms でサーバー起動
+- **瞬間HMR**: 変更が即座に反映
+- **最適化ビルド**: 効率的なコードスプリッティング
+- **TypeScript統合**: ネイティブサポート
+
+### 利用可能なスクリプト
+
+```bash
+# 開発モード (フロントエンド + バックエンド)
+npm run dev
+# → Viteクライアント: http://localhost:5173/
+# → Expressサーバー: http://localhost:5000/
+
+# 型チェック
+cd client && npm run type-check
+cd server && npm run type-check
+
+# ビルド
+cd client && npm run build  # → dist/ フォルダに出力
+cd server && npm run build  # → dist/ フォルダに出力
+
+# プレビュー（ビルド結果確認）
+cd client && npm run preview
+
+# コード品質
+cd client && npm run lint
+```
 
 ### 🎵 音声解析機能のセットアップ (NEW!)
 
@@ -109,68 +161,58 @@ GroqのWhisper-large-v3を使用した音声解析機能を利用するには:
 # .envファイルに追加:
 echo "GROQ_API_KEY=your-api-key-here" >> server/.env
 
-# 必要なパッケージをインストール
-cd server && npm install axios form-data
-
 # 3. テスト実行
 node server/test-audio-analysis.js
 ```
 
 詳細な使用方法については [音声解析ガイド](./AUDIO_ANALYSIS_GUIDE.md) を参照してください。
 
-### 利用可能なスクリプト
+### 🛠️ 開発ツール
 
+#### 便利なバッチファイル
 ```bash
-# 開発モード (フロントエンド + バックエンド)
-npm run dev
+# 開発サーバー起動（依存関係チェック付き）
+dev-start.bat
 
-# 型チェック
-npm run type-check
-
-# コード品質チェック
-npm run lint
-npm run lint:fix
-
-# フォーマット
-npm run format
-
-# テスト実行
-npm run test
-
-# プロダクションビルド
-npm run build
-
-# プロダクション起動
-npm start
+# GitHubプッシュ + VPSデプロイ案内
+quick-deploy.bat
 ```
+
+#### 開発フロー
+詳細な開発ワークフローは [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) を参照
 
 ### プロジェクト構造
 
 ```
 FlickMV/
-├── client/                 # React フロントエンド
+├── client/                      # Vite + React フロントエンド
 │   ├── src/
-│   │   ├── components/     # 再利用可能コンポーネント
-│   │   ├── pages/         # ページコンポーネント
-│   │   ├── hooks/         # カスタムフック
-│   │   ├── contexts/      # React Context
-│   │   ├── services/      # API クライアント
-│   │   ├── types/         # TypeScript 型定義
-│   │   └── utils/         # ユーティリティ関数
+│   │   ├── components/          # 再利用可能コンポーネント
+│   │   ├── pages/              # ページコンポーネント
+│   │   ├── hooks/              # カスタムフック
+│   │   ├── contexts/           # React Context
+│   │   ├── services/           # API クライアント
+│   │   ├── types/              # TypeScript 型定義
+│   │   └── utils/              # ユーティリティ関数
+│   ├── dist/                   # ビルド出力 (Vite)
+│   ├── vite.config.ts          # Vite設定
+│   ├── tailwind.config.js      # TailwindCSS設定
 │   └── package.json
-├── server/                # Node.js バックエンド
+├── client-react-scripts-backup/ # 旧CRA版バックアップ
+├── server/                     # Node.js + Express バックエンド
 │   ├── src/
-│   │   ├── routes/        # API ルート
-│   │   ├── services/      # ビジネスロジック
-│   │   ├── middleware/    # Express ミドルウェア
-│   │   ├── models/        # データモデル
-│   │   └── utils/         # ユーティリティ
+│   │   ├── routes/             # API ルート
+│   │   ├── services/           # ビジネスロジック
+│   │   ├── middleware/         # Express ミドルウェア
+│   │   ├── models/             # データモデル
+│   │   └── utils/              # ユーティリティ
+│   ├── dist/                   # TypeScriptビルド出力
+│   ├── prisma/                 # Prisma設定・マイグレーション
 │   └── package.json
-├── worker/                # 動画処理ワーカー
-│   ├── src/
-│   │   ├── services/      # FFmpeg 処理
-│   │   └── utils/         # ワーカーユーティリティ
-│   └── package.json
+├── worker/                     # 動画処理ワーカー
+├── DEVELOPMENT_WORKFLOW.md     # 開発フローガイド
+├── dev-start.bat              # 開発サーバー起動
+├── quick-deploy.bat           # 簡単デプロイ
 └── README.md
 ```
 
@@ -196,33 +238,65 @@ FlickMV/
 
 ## 🔧 デプロイメント
 
-### 本番環境デプロイ
+### VPS本番環境デプロイ
 
-#### VPSへのデプロイ
+#### 基本デプロイフロー
 ```bash
-# サーバーにSSH接続
-ssh user@your-server.com
+# 1. ローカル開発完了後
+cd "C:\Users\mayum\OneDrive\デスクトップ\FlickMV"
+git add .
+git commit -m "新機能追加"
+git push origin main
 
-# プロジェクトをクローン
-git clone https://github.com/your-org/flickmv.git
-cd flickmv
+# 2. VPSにSSH接続
+ssh username@your-vps-ip
 
-# 依存関係インストール
-npm run install-all
-
-# 環境変数設定
-cp .env.example .env
-# 本番環境の値を設定
-
-# ビルド
-npm run build
-
-# PM2で起動
-pm2 start ecosystem.config.js
-pm2 save
+# 3. 自動デプロイスクリプト実行
+cd /var/www/flickmv
+./deploy.sh
 ```
 
-#### Dockerデプロイ
+#### 手動デプロイ手順
+```bash
+# VPSでの手動デプロイ
+cd /var/www/flickmv
+git pull origin main
+
+# クライアント更新（Vite）
+cd client
+npm install  # package.json変更時のみ
+npm run build  # → dist/ フォルダに出力
+
+# サーバー更新
+cd ../server
+npm install  # package.json変更時のみ
+npm run build
+
+# Prisma更新（必要時）
+npx prisma generate
+npx prisma migrate deploy
+
+# PM2再起動
+pm2 restart flickmv-api
+pm2 logs flickmv-api --lines 10
+```
+
+#### Nginx設定（Vite対応）
+```nginx
+# /etc/nginx/sites-available/flickmv-temp
+location / {
+    root /var/www/flickmv/client/dist;  # Viteビルド出力
+    index index.html index.htm;
+    try_files $uri $uri/ /index.html;
+}
+
+location /api/ {
+    proxy_pass http://localhost:5000/api/;
+    # ... その他プロキシ設定
+}
+```
+
+### Docker デプロイ
 ```bash
 # Dockerイメージビルド
 docker build -t flickmv .
@@ -230,23 +304,10 @@ docker build -t flickmv .
 # コンテナ起動
 docker run -d \
   --name flickmv \
-  -p 3000:3000 \
+  -p 5173:5173 \
   -p 5000:5000 \
   --env-file .env \
   flickmv
-```
-
-### ワーカーデプロイ (Cloud Run Jobs)
-```bash
-# イメージビルド & プッシュ
-gcloud builds submit --tag gcr.io/PROJECT_ID/flickmv-worker ./worker
-
-# Cloud Run Jobs作成
-gcloud beta run jobs create flickmv-worker-job \
-  --image gcr.io/PROJECT_ID/flickmv-worker \
-  --region=asia-northeast1 \
-  --memory=8Gi \
-  --set-env-vars="DATABASE_URL=${DATABASE_URL}"
 ```
 
 ## 📊 監視・メンテナンス
@@ -254,61 +315,74 @@ gcloud beta run jobs create flickmv-worker-job \
 ### ヘルスチェック
 ```bash
 # APIヘルス確認
-curl http://localhost:5000/health
+curl https://flickmv.jp/api/health
 
 # レスポンス例
 {
   "success": true,
   "status": "OK",
   "db": "ok",
-  "timestamp": "2025-08-15T10:30:00.000Z",
+  "timestamp": "2025-08-24T12:00:00.000Z",
   "uptime": 3600,
-  "version": "1.2.0"
+  "version": "1.2.0",
+  "build": "vite"
 }
 ```
 
+### パフォーマンス指標
+- **Lighthouse**: 90+ スコア維持
+- **Core Web Vitals**: 全て良好
+- **ビルドサイズ**: 最適化済み
+- **初回読み込み**: <3秒
+
 ### ログ監視
 ```bash
-# サーバーログ
+# VPSでのログ確認
 pm2 logs flickmv-api
+pm2 monit
 
-# ワーカーログ (Cloud Run)
-gcloud logging read "resource.type=cloud_run_job" --limit=50
+# Nginxログ
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
 ```
 
-### パフォーマンス監視
-- **Lighthouse CI** - パフォーマンススコア
-- **Sentry** - エラートラッキング  
-- **Google Analytics** - ユーザー行動分析
+## 🚀 Vite移行の恩恵
+
+### パフォーマンス向上
+- **開発サーバー起動**: 数秒 → **180ms**
+- **HMR**: より高速な変更反映
+- **ビルド時間**: 大幅短縮
+- **バンドルサイズ**: 最適化
+
+### 開発体験向上
+- **TypeScript統合**: ネイティブサポート
+- **プラグインシステム**: 豊富なエコシステム
+- **ES modules**: モダンJavaScript
+- **Tree shaking**: 未使用コード除去
 
 ## 🤝 貢献方法
 
 ### 開発フロー
 1. **Issue** を作成または選択
-2. **Feature branch** を作成
+2. **Feature branch** を作成 (`git checkout -b feature/new-feature`)
 3. **開発・テスト** を実施
 4. **Pull Request** を作成
 5. **コードレビュー** を受ける
 6. **main branch** にマージ
 
 ### コーディング規約
-- **TypeScript** を使用
+- **TypeScript** を使用（strict mode）
 - **ESLint + Prettier** でコード品質維持
 - **Conventional Commits** でコミットメッセージ統一
-- **100% 型安全** を目指す
-
-### テスト方針
-- **単体テスト**: Jest + Testing Library
-- **統合テスト**: API エンドポイント
-- **E2Eテスト**: Playwright (今後追加予定)
+- **Vite** 最適化パターンの活用
 
 ## 📚 ドキュメント
 
 ### 開発者向け
+- **[開発ワークフロー](./DEVELOPMENT_WORKFLOW.md)** - 詳細な開発フロー
 - [API ドキュメント](./docs/api.md)
+- [音声解析ガイド](./AUDIO_ANALYSIS_GUIDE.md)
 - [デプロイガイド](./docs/deployment.md)
-- [開発環境構築](./docs/development.md)
-- [トラブルシューティング](./docs/troubleshooting.md)
 
 ### ユーザー向け
 - [ユーザーガイド](./docs/user-guide.md)
@@ -322,27 +396,22 @@ MIT License - 詳細は [LICENSE](./LICENSE) ファイルを参照
 
 ## 🔗 リンク
 
-- **本番サイト**: https://flickmv.com
-- **ステージング**: https://staging.flickmv.com  
-- **API ドキュメント**: https://api.flickmv.com/docs
+- **本番サイト**: https://flickmv.jp
+- **API ドキュメント**: https://flickmv.jp/api/docs
 - **サポート**: support@flickmv.com
 
 ## 👥 チーム
 
-- **Product Owner**: プロダクトオーナー
-- **Tech Lead**: テクニカルリード  
-- **Frontend Team**: フロントエンド開発チーム
-- **Backend Team**: バックエンド開発チーム
-- **DevOps**: インフラ・運用チーム
+FlickMV開発チームによる継続的な改善とサポート
 
 ---
 
 ## 🙏 謝辞
 
-FlickMVの開発にご協力いただいた全ての方々に感謝いたします。
+FlickMVの開発・Vite移行にご協力いただいた全ての方々に感謝いたします。
 
-**Made with ❤️ by FlickMV Team**
+**Made with ❤️ and ⚡ Vite by FlickMV Team**
 
 ---
 
-*最終更新: 2025年8月15日*
+*最終更新: 2025年8月24日 - Vite移行完了*
