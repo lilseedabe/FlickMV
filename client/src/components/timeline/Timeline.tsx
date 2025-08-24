@@ -21,7 +21,7 @@ import {
   Zap
 } from 'lucide-react';
 import type { Timeline as TimelineType, TimelineClip, AudioTrack, Transition } from '../../types';
-// import WaveformDisplay from '../waveform/WaveformDisplay';
+import WaveformDisplay from '../waveform/WaveformDisplay';
 
 interface TimelineProps {
   timeline: TimelineType;
@@ -32,10 +32,10 @@ interface TimelineProps {
 }
 
 /**
- * 修正版タイムライン - シンプルで安定した実装
- * - 標準的なマウスイベントを使用
- * - ドラッグとリサイズの分離実装
- * - デバッグしやすいコード構造
+ * 修正版タイムライン v2 - リサイズ問題と波形表示を修正
+ * - 左右両端リサイズを正確に実装
+ * - WaveformDisplay復活
+ * - より詳細なデバッグログ
  */
 const Timeline: React.FC<TimelineProps> = ({
   timeline,
@@ -65,13 +65,17 @@ const Timeline: React.FC<TimelineProps> = ({
     startX: number;
     originalStartTime: number;
     originalDuration: number;
+    originalTrimStart: number;
+    originalTrimEnd: number;
   }>({
     isResizing: false,
     clipId: null,
     edge: null,
     startX: 0,
     originalStartTime: 0,
-    originalDuration: 0
+    originalDuration: 0,
+    originalTrimStart: 0,
+    originalTrimEnd: 0
   });
 
   // ========== Refs ==========
@@ -102,6 +106,7 @@ const Timeline: React.FC<TimelineProps> = ({
     // リサイズハンドルがクリックされた場合はドラッグしない
     const target = e.target as HTMLElement;
     if (target.classList.contains('resize-handle')) {
+      console.log(`🔧 Resize handle clicked, not dragging`);
       return;
     }
 
@@ -143,7 +148,6 @@ const Timeline: React.FC<TimelineProps> = ({
     }
 
     if (resizeState.isResizing && resizeState.clipId && timelineRef.current) {
-      const rect = timelineRef.current.getBoundingClientRect();
       const deltaX = e.clientX - resizeState.startX;
       const deltaTime = pixelToTime(deltaX);
 
@@ -157,26 +161,35 @@ const Timeline: React.FC<TimelineProps> = ({
         const newStartTime = Math.max(0, resizeState.originalStartTime + deltaTime);
         const maxStartTime = resizeState.originalStartTime + resizeState.originalDuration - 0.1;
         const clampedStartTime = Math.min(newStartTime, maxStartTime);
-        const newDuration = resizeState.originalDuration - (clampedStartTime - resizeState.originalStartTime);
+        const timeDiff = clampedStartTime - resizeState.originalStartTime;
+        const newDuration = resizeState.originalDuration - timeDiff;
+
+        console.log(`🔧 Left resize: startTime ${clampedStartTime.toFixed(2)}s, duration ${newDuration.toFixed(2)}s`);
 
         updatedClip = {
           ...clip,
           startTime: clampedStartTime,
           duration: Math.max(0.1, newDuration),
-          trimStart: Math.max(0, clip.trimStart + (clampedStartTime - resizeState.originalStartTime))
+          trimStart: Math.max(0, resizeState.originalTrimStart + timeDiff)
         };
-      } else {
+      } else if (resizeState.edge === 'right') {
         // 右端のリサイズ - 長さのみ調整
         const newDuration = Math.max(0.1, resizeState.originalDuration + deltaTime);
-        const maxDuration = (clip.trimEnd || clip.duration) - clip.trimStart;
         
+        // 元のメディアファイルの長さを考慮した最大長さ制限
+        const maxPossibleDuration = resizeState.originalTrimEnd - resizeState.originalTrimStart;
+        const finalDuration = Math.min(newDuration, maxPossibleDuration);
+        
+        console.log(`🔧 Right resize: duration ${finalDuration.toFixed(2)}s (max: ${maxPossibleDuration.toFixed(2)}s)`);
+
         updatedClip = {
           ...clip,
-          duration: Math.min(newDuration, maxDuration)
+          duration: finalDuration,
+          trimEnd: resizeState.originalTrimStart + finalDuration
         };
+      } else {
+        return; // 不正な状態
       }
-
-      console.log(`🔧 Resizing ${resizeState.edge} edge of clip ${resizeState.clipId}: ${updatedClip.startTime.toFixed(2)}s, ${updatedClip.duration.toFixed(2)}s`);
 
       const updatedClips = timeline.clips.map(c =>
         c.id === resizeState.clipId ? updatedClip : c
@@ -201,14 +214,16 @@ const Timeline: React.FC<TimelineProps> = ({
     }
 
     if (resizeState.isResizing) {
-      console.log(`✅ Resize completed for clip: ${resizeState.clipId}`);
+      console.log(`✅ Resize completed for clip: ${resizeState.clipId} (${resizeState.edge})`);
       setResizeState({
         isResizing: false,
         clipId: null,
         edge: null,
         startX: 0,
         originalStartTime: 0,
-        originalDuration: 0
+        originalDuration: 0,
+        originalTrimStart: 0,
+        originalTrimEnd: 0
       });
     }
 
@@ -221,7 +236,12 @@ const Timeline: React.FC<TimelineProps> = ({
     e.preventDefault();
     e.stopPropagation();
 
-    console.log(`🔧 Starting resize ${edge} for clip: ${clip.id}`);
+    console.log(`🔧 Starting resize ${edge} for clip: ${clip.id}`, {
+      startTime: clip.startTime,
+      duration: clip.duration,
+      trimStart: clip.trimStart,
+      trimEnd: clip.trimEnd
+    });
 
     setResizeState({
       isResizing: true,
@@ -229,7 +249,9 @@ const Timeline: React.FC<TimelineProps> = ({
       edge,
       startX: e.clientX,
       originalStartTime: clip.startTime,
-      originalDuration: clip.duration
+      originalDuration: clip.duration,
+      originalTrimStart: clip.trimStart,
+      originalTrimEnd: clip.trimEnd
     });
 
     // マウスカーソルを変更
@@ -264,7 +286,12 @@ const Timeline: React.FC<TimelineProps> = ({
     playheadPosition < selectedClip.startTime + selectedClip.duration;
 
   const handleClipSelect = useCallback((clip: TimelineClip) => {
-    console.log(`🎯 Clip selected: ${clip.id}`);
+    console.log(`🎯 Clip selected: ${clip.id}`, {
+      startTime: clip.startTime,
+      duration: clip.duration,
+      trimStart: clip.trimStart,
+      trimEnd: clip.trimEnd
+    });
     setSelectedClipId(clip.id);
     onClipSelect(clip);
   }, [onClipSelect]);
@@ -473,7 +500,7 @@ const Timeline: React.FC<TimelineProps> = ({
       <div className="bg-dark-800 border-b border-dark-700 p-4 flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <h3 className="text-lg font-semibold text-white">Timeline (修正版)</h3>
+            <h3 className="text-lg font-semibold text-white">Timeline (修正版 v2)</h3>
             {selectedClip && (
               <div className="text-sm text-purple-400 bg-purple-500/20 px-2 py-1 rounded">
                 {selectedClip.id.slice(-8)} selected
@@ -635,7 +662,7 @@ const Timeline: React.FC<TimelineProps> = ({
                         } ${dragState.isDragging && dragState.clipId === clip.id ? 'z-50 shadow-2xl' : ''}`}
                         style={{
                           left: timeToPixel(clip.startTime),
-                          width: timeToPixel(clip.duration),
+                          width: Math.max(timeToPixel(clip.duration), 20), // 最小幅を確保
                           height: trackHeight - 8,
                           top: 4,
                           borderRadius: '6px'
@@ -650,10 +677,12 @@ const Timeline: React.FC<TimelineProps> = ({
                       >
                         {/* 左端リサイズハンドル */}
                         <div
-                          className="resize-handle absolute left-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          className="resize-handle absolute left-0 top-0 w-3 h-full bg-white/20 hover:bg-white/60 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-20"
                           onMouseDown={(e) => handleResizeMouseDown(e, clip, 'left')}
                           title="Resize clip start"
-                        />
+                        >
+                          <div className="w-1 h-full bg-white/80 ml-1" />
+                        </div>
                         
                         {/* クリップコンテンツ */}
                         <div className="flex items-center justify-between h-full px-3 py-1 relative">
@@ -683,10 +712,12 @@ const Timeline: React.FC<TimelineProps> = ({
                         
                         {/* 右端リサイズハンドル */}
                         <div
-                          className="resize-handle absolute right-0 top-0 w-2 h-full bg-white/30 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          className="resize-handle absolute right-0 top-0 w-3 h-full bg-white/20 hover:bg-white/60 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-20"
                           onMouseDown={(e) => handleResizeMouseDown(e, clip, 'right')}
                           title="Resize clip end"
-                        />
+                        >
+                          <div className="w-1 h-full bg-white/80 mr-1 ml-auto" />
+                        </div>
                         
                         {/* 選択/ドラッグインジケーター */}
                         {selectedClipId === clip.id && (
@@ -695,6 +726,10 @@ const Timeline: React.FC<TimelineProps> = ({
                         
                         {dragState.isDragging && dragState.clipId === clip.id && (
                           <div className="absolute inset-0 border-2 border-yellow-400 rounded-md pointer-events-none animate-pulse bg-yellow-400/20" />
+                        )}
+                        
+                        {resizeState.isResizing && resizeState.clipId === clip.id && (
+                          <div className="absolute inset-0 border-2 border-blue-400 rounded-md pointer-events-none animate-pulse bg-blue-400/20" />
                         )}
                       </motion.div>
                     ))}
@@ -730,19 +765,21 @@ const Timeline: React.FC<TimelineProps> = ({
                     top: 4
                   }}
                 >
-                  {/* Waveform Display - Placeholder */}
                   {audioTrack.url ? (
-                    <div className="flex items-center h-full px-2 bg-cyan-500/20 border border-cyan-500/30 rounded">
-                      <Activity className="w-3 h-3 mr-1 text-cyan-400" />
-                      <span className="text-xs truncate text-cyan-300">
-                        🎵 {audioTrack.name || 'Audio Track'} (Waveform)
-                      </span>
-                      {audioTrack.bpm && (
-                        <span className="ml-auto text-xs text-cyan-400">
-                          {audioTrack.bpm} BPM
-                        </span>
-                      )}
-                    </div>
+                    <WaveformDisplay
+                      audioTrack={audioTrack}
+                      width={timeToPixel(audioTrack.duration)}
+                      height={audioTrackHeight - 8}
+                      startTime={audioTrack.startTime}
+                      duration={audioTrack.duration}
+                      zoom={zoom}
+                      color="#06b6d4"
+                      showBeats={true}
+                      className="rounded border border-cyan-500/30 bg-cyan-500/10"
+                      onWaveformClick={(time) => {
+                        console.log('🎵 Waveform clicked at time:', time);
+                      }}
+                    />
                   ) : (
                     <div className="flex items-center h-full px-2 bg-cyan-500/10 border border-cyan-500/30 rounded">
                       <Activity className="w-3 h-3 mr-1 text-cyan-400" />
@@ -781,23 +818,26 @@ const Timeline: React.FC<TimelineProps> = ({
       </div>
 
       {/* Debug Info */}
-      {/* Debug Info - Development Mode */ true && (
-        <div className="bg-dark-800 border-t border-dark-700 px-4 py-2 text-xs text-gray-500">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <span>Clips: {timeline.clips.length}</span>
-              <span>Selected: {selectedClipId || 'none'}</span>
-              <span>Dragging: {dragState.isDragging ? dragState.clipId : 'false'}</span>
-              <span>Resizing: {resizeState.isResizing ? `${resizeState.clipId} (${resizeState.edge})` : 'false'}</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span>Zoom: {Math.round(zoom * 100)}%</span>
-              <span>PPS: {pixelsPerSecond.toFixed(0)}</span>
-              <span>Playhead: {playheadPosition.toFixed(2)}s</span>
-            </div>
+      <div className="bg-dark-800 border-t border-dark-700 px-4 py-2 text-xs text-gray-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <span>Clips: {timeline.clips.length}</span>
+            <span>Selected: {selectedClipId || 'none'}</span>
+            <span>Dragging: {dragState.isDragging ? dragState.clipId : 'false'}</span>
+            <span>Resizing: {resizeState.isResizing ? `${resizeState.clipId} (${resizeState.edge})` : 'false'}</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <span>Zoom: {Math.round(zoom * 100)}%</span>
+            <span>PPS: {pixelsPerSecond.toFixed(0)}</span>
+            <span>Playhead: {playheadPosition.toFixed(2)}s</span>
+            {selectedClip && (
+              <span className="text-blue-400">
+                Selected: {selectedClip.startTime.toFixed(1)}s + {selectedClip.duration.toFixed(1)}s
+              </span>
+            )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
